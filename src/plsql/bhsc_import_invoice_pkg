@@ -1,0 +1,2525 @@
+create or replace package bhsc_import_invoice_pkg is
+
+  	 
+
+  PROCEDURE insert_invoice  (
+            --  p_INVOICE_ID        	     IN      NUMBER,    
+              p_INVOICE_NUM                OUT      VARCHAR,  
+              p_VENDOR_ID                   IN      NUMBER,    
+              p_VENDOR_SITE_ID                IN      NUMBER,    
+              p_INVOICE_AMOUNT                 IN      NUMBER,        
+          --    p_INVOICE_TYPE_LOOKUP_CODE    IN      VARCHAR,  
+              p_VENDOR_NAME                 IN        VARCHAR, 
+              p_INVOICE_CURRENCY_CODE       IN        VARCHAR,  
+              p_EXCHANGE_RATE               IN        NUMBER,        
+              p_ORG_ID                      IN        NUMBER,    
+            --  p_SOURCE                      IN        VARCHAR,  
+              p_INVOICE_DATE                IN        DATE,          
+              p_EXCHANGE_RATE_TYPE          IN        VARCHAR,
+              p_CASH_ITEMS_TRANSFER         in        varchar2,
+							p_dist_code_combination_id_t    in        number,
+              
+							p_status                      out       varchar,
+							p_msg                         out       varchar,
+							p_invoice_error_msg           out       varchar,
+							p_INVOICE_ID                  out       number
+          );
+					
+					
+    PROCEDURE  create_ap_check(
+                              p_BANK_ID_T           IN    NUMBER,
+                              p_amount              IN    NUMBER,
+                            --  p_bank_account_name     IN    VARCHAR2,
+                              p_transfer_date       IN    DATE,
+                            --  p_currency_code       IN    VARCHAR2,
+                              p_vendor_site_id      IN    NUMBER,
+                              p_invoice_id          IN    NUMBER,
+                              p_msg                 out   varchar,
+                              p_status              out   varchar,
+                              p_payment_num         out   number
+ );
+		
+	
+					
+	 	 PROCEDURE create_cash (
+              p_CUSTOMER_ID                   IN NUMBER,
+              p_BANK_ACCOUNT_NAME            IN VARCHAR2,
+              p_INVOICE_CURRENCY_CODE        IN VARCHAR2,
+              p_INVOICE_AMOUNT               IN NUMBER,
+              p_ENTRY_DATE                   IN DATE,
+						  p_org_id                       IN NUMBER,
+              p_CASH_ITEMS_ENTRY             IN VARCHAR2,
+              p_dist_code_combination_id_e   in number,
+						  x_msg                          OUT  varchar,
+						  x_status                       OUT  VARCHAR2,
+              x_cash_receipt_number          OUT  varchar2
+              );
+							
+	 procedure update_je_flex (  x_bank_cash_ccid_t            in number,
+                                  x_dist_code_combination_id_t  in number,
+                                  x_CASH_ITEMS_ENTRY            in varchar,
+                                  x_je_batch_id                 in number
+                            ) ;				
+                            
+		 PROCEDURE CREATE_GL  (
+    
+                p_TRANSFER_DATE               IN      DATE,
+                p_ENTRY_DATE                  IN      DATE,
+               
+                p_CURRENCY_CODE_TRANSFER      IN      VARCHAR2,
+               
+                p_SET_OF_BOOKS_ID_TRANSFER    IN      NUMBER,
+                p_SET_OF_BOOKS_ID_ENTRY       IN      NUMBER,
+                P_CODE_COMBINATION_ID_T       IN      NUMBER,
+                P_CODE_COMBINATION_ID_E       IN      NUMBER,
+                p_AMOUNT_T                    IN      NUMBER,
+                p_cash_items_entry            in      varchar,
+                p_cash_items_transfer         in      varchar,
+                p_BANK_ID_T                   IN      NUMBER,
+                p_BANK_ID_E                   IN      NUMBER,
+                p_status                      OUT     VARCHAR,
+                p_msg                         OUT     VARCHAR,
+                p_doc_sequence_value_e        out     number,
+                p_doc_sequence_value_t        out     number
+               
+                  
+    );
+    
+    
+    PROCEDURE CREATE_GL_INTERNAL  (
+    
+                p_TRANSFER_DATE               IN      DATE,
+                p_ENTRY_DATE                  IN      DATE,
+               
+                p_CURRENCY_CODE_TRANSFER      IN      VARCHAR2,
+               
+                p_SET_OF_BOOKS_ID_TRANSFER    IN      NUMBER,
+                p_SET_OF_BOOKS_ID_ENTRY       IN      NUMBER, 
+               
+                p_AMOUNT_T                    IN      NUMBER,
+                
+                p_BANK_ID_T                   IN      NUMBER,
+                p_BANK_ID_E                   IN      NUMBER,
+                p_status                      OUT     VARCHAR,
+                p_msg                         OUT     VARCHAR,
+               
+                p_doc_sequence_value_t        out     number
+               
+                  
+    );
+
+end bhsc_import_invoice_pkg;
+/
+create or replace package body bhsc_import_invoice_pkg is
+
+
+TYPE r_check_header_rec IS RECORD(
+    amount                       ap.ap_checks_all.amount%TYPE,
+    ce_bank_acct_use_id          ap.ap_checks_all.ce_bank_acct_use_id%TYPE,
+    bank_account_name            ap.ap_checks_all.bank_account_name%TYPE,
+    check_date                   ap.ap_checks_all.check_date%TYPE,
+    check_id                     ap.ap_checks_all.check_id%TYPE,
+    check_number                 ap.ap_checks_all.check_number%TYPE,
+    currency_code                ap.ap_checks_all.currency_code%TYPE,
+    last_updated_by              ap.ap_checks_all.last_updated_by%TYPE,
+    last_update_date             ap.ap_checks_all.last_update_date%TYPE,
+    payment_type_flag            ap.ap_checks_all.payment_type_flag%TYPE,
+    address_line1                ap.ap_checks_all.address_line1%TYPE,
+    address_line2                ap.ap_checks_all.address_line2%TYPE,
+    address_line3                ap.ap_checks_all.address_line3%TYPE,
+    checkrun_name                ap.ap_checks_all.checkrun_name%TYPE,
+    check_format_id              ap.ap_checks_all.check_format_id%TYPE,
+    check_stock_id               ap.ap_checks_all.check_stock_id%TYPE,
+    city                         ap.ap_checks_all.city%TYPE,
+    country                      ap.ap_checks_all.country%TYPE,
+    created_by                   ap.ap_checks_all.created_by%TYPE,
+    creation_date                ap.ap_checks_all.creation_date%TYPE,
+    last_update_login            ap.ap_checks_all.last_update_login%TYPE,
+    status_lookup_code           ap.ap_checks_all.status_lookup_code%TYPE,
+    vendor_name                  ap.ap_checks_all.vendor_name%TYPE,
+    vendor_site_code             ap.ap_checks_all.vendor_site_code%TYPE,
+    external_bank_account_id     ap.ap_checks_all.external_bank_account_id%TYPE,
+    zip                          ap.ap_checks_all.zip%TYPE,
+    bank_account_num             ap.ap_checks_all.bank_account_num%TYPE,
+    bank_account_type            ap.ap_checks_all.bank_account_type%TYPE,
+    bank_num                     ap.ap_checks_all.bank_num%TYPE,
+    check_voucher_num            ap.ap_checks_all.check_voucher_num%TYPE,
+    cleared_amount               ap.ap_checks_all.cleared_amount%TYPE,
+    cleared_date                 ap.ap_checks_all.cleared_date%TYPE,
+    doc_category_code            ap.ap_checks_all.doc_category_code%TYPE,
+    doc_sequence_id              ap.ap_checks_all.doc_sequence_id%TYPE,
+    doc_sequence_value           ap.ap_checks_all.doc_sequence_value%TYPE,
+    province                     ap.ap_checks_all.province%TYPE,
+    released_date                ap.ap_checks_all.released_date%TYPE,
+    released_by                  ap.ap_checks_all.released_by%TYPE,
+    state                        ap.ap_checks_all.state%TYPE,
+    stopped_date                 ap.ap_checks_all.stopped_date%TYPE,
+    stopped_by                   ap.ap_checks_all.stopped_by%TYPE,
+    void_date                    ap.ap_checks_all.void_date%TYPE,
+    attribute1                   ap.ap_checks_all.attribute1%TYPE,
+    attribute10                  ap.ap_checks_all.attribute10%TYPE,
+    attribute11                  ap.ap_checks_all.attribute11%TYPE,
+    attribute12                  ap.ap_checks_all.attribute12%TYPE,
+    attribute13                  ap.ap_checks_all.attribute13%TYPE,
+    attribute14                  ap.ap_checks_all.attribute14%TYPE,
+    attribute15                  ap.ap_checks_all.attribute15%TYPE,
+    attribute2                   ap.ap_checks_all.attribute2%TYPE,
+    attribute3                   ap.ap_checks_all.attribute3%TYPE,
+    attribute4                   ap.ap_checks_all.attribute4%TYPE,
+    attribute5                   ap.ap_checks_all.attribute5%TYPE,
+    attribute6                   ap.ap_checks_all.attribute6%TYPE,
+    attribute7                   ap.ap_checks_all.attribute7%TYPE,
+    attribute8                   ap.ap_checks_all.attribute8%TYPE,
+    attribute9                   ap.ap_checks_all.attribute9%TYPE,
+    attribute_category           ap.ap_checks_all.attribute_category%TYPE,
+    future_pay_due_date          ap.ap_checks_all.future_pay_due_date%TYPE,
+    treasury_pay_date            ap.ap_checks_all.treasury_pay_date%TYPE,
+    treasury_pay_number          ap.ap_checks_all.treasury_pay_number%TYPE,
+    withholding_status_lkup_code VARCHAR2(25),
+    reconciliation_batch_id      ap.ap_checks_all.reconciliation_batch_id%TYPE,
+    cleared_base_amount          ap.ap_checks_all.cleared_base_amount%TYPE,
+    cleared_exchange_rate        ap.ap_checks_all.cleared_exchange_rate%TYPE,
+    cleared_exchange_date        ap.ap_checks_all.cleared_exchange_date%TYPE,
+    cleared_exchange_rate_type   ap.ap_checks_all.cleared_exchange_rate_type%TYPE,
+    address_line4                ap.ap_checks_all.address_line4%TYPE,
+    county                       ap.ap_checks_all.county%TYPE,
+    address_style                ap.ap_checks_all.address_style%TYPE,
+    org_id                       ap.ap_checks_all.org_id%TYPE,
+    vendor_id                    ap.ap_checks_all.vendor_id%TYPE,
+    vendor_site_id               ap.ap_checks_all.vendor_site_id%TYPE,
+    exchange_rate                ap.ap_checks_all.exchange_rate%TYPE,
+    exchange_date                ap.ap_checks_all.exchange_date%TYPE,
+    exchange_rate_type           ap.ap_checks_all.exchange_rate_type%TYPE,
+    base_amount                  ap.ap_checks_all.base_amount%TYPE,
+    checkrun_id                  ap.ap_checks_all.checkrun_id%TYPE,
+    global_attribute_category    ap.ap_checks_all.global_attribute_category%TYPE,
+    global_attribute1            ap.ap_checks_all.global_attribute1%TYPE,
+    global_attribute2            ap.ap_checks_all.global_attribute2%TYPE,
+    global_attribute3            ap.ap_checks_all.global_attribute3%TYPE,
+    global_attribute4            ap.ap_checks_all.global_attribute4%TYPE,
+    global_attribute5            ap.ap_checks_all.global_attribute5%TYPE,
+    global_attribute6            ap.ap_checks_all.global_attribute6%TYPE,
+    global_attribute7            ap.ap_checks_all.global_attribute7%TYPE,
+    global_attribute8            ap.ap_checks_all.global_attribute8%TYPE,
+    global_attribute9            ap.ap_checks_all.global_attribute9%TYPE,
+    global_attribute10           ap.ap_checks_all.global_attribute10%TYPE,
+    global_attribute11           ap.ap_checks_all.global_attribute11%TYPE,
+    global_attribute12           ap.ap_checks_all.global_attribute12%TYPE,
+    global_attribute13           ap.ap_checks_all.global_attribute13%TYPE,
+    global_attribute14           ap.ap_checks_all.global_attribute14%TYPE,
+    global_attribute15           ap.ap_checks_all.global_attribute15%TYPE,
+    global_attribute16           ap.ap_checks_all.global_attribute16%TYPE,
+    global_attribute17           ap.ap_checks_all.global_attribute17%TYPE,
+    global_attribute18           ap.ap_checks_all.global_attribute18%TYPE,
+    global_attribute19           ap.ap_checks_all.global_attribute19%TYPE,
+    global_attribute20           ap.ap_checks_all.global_attribute20%TYPE,
+    transfer_priority            ap.ap_checks_all.transfer_priority%TYPE,
+    maturity_exchange_rate_type  ap.ap_checks_all.maturity_exchange_rate_type%TYPE,
+    maturity_exchange_date       ap.ap_checks_all.maturity_exchange_date%TYPE,
+    maturity_exchange_rate       ap.ap_checks_all.maturity_exchange_rate%TYPE,
+    description                  ap.ap_checks_all.description%TYPE,
+    anticipated_value_date       ap.ap_checks_all.anticipated_value_date%TYPE,
+    actual_value_date            ap.ap_checks_all.actual_value_date%TYPE,
+    payment_method_code          ap.ap_checks_all.payment_method_code%TYPE,
+    payment_profile_id           ap.ap_checks_all.payment_profile_id%TYPE,
+    bank_charge_bearer           ap.ap_checks_all.bank_charge_bearer%TYPE,
+    settlement_priority          ap.ap_checks_all.settlement_priority%TYPE,
+    payment_document_id          ap.ap_checks_all.payment_document_id%TYPE,
+    party_id                     ap.ap_checks_all.party_id%TYPE,
+    party_site_id                ap.ap_checks_all.party_site_id%TYPE,
+    legal_entity_id              ap.ap_checks_all.legal_entity_id%TYPE,
+    payment_id                   ap.ap_checks_all.payment_id%TYPE,
+    calling_sequence             VARCHAR2(25),
+    remit_to_supplier_name       ap.ap_checks_all.remit_to_supplier_name%TYPE,
+    remit_to_supplier_id         ap.ap_checks_all.remit_to_supplier_id%TYPE,
+    remit_to_supplier_site       ap.ap_checks_all.remit_to_supplier_site%TYPE,
+    remit_to_supplier_site_id    ap.ap_checks_all.remit_to_supplier_site_id%TYPE,
+    relationship_id              ap.ap_checks_all.relationship_id%TYPE,
+    paycard_authorization_number ap.ap_checks_all.paycard_authorization_number%TYPE,
+    paycard_reference_id         ap.ap_checks_all.paycard_reference_id%TYPE);
+    
+ TYPE r_check_line_rec IS RECORD(
+    payment_num               ap_invoice_payments.payment_num%TYPE,
+    invoice_payment_id        ap_invoice_payments.invoice_payment_id%TYPE,
+    old_invoice_payment_id    NUMBER,
+    period_name               ap_invoice_payments.period_name%TYPE,
+    invoice_type              VARCHAR2(50),
+    accounting_date           ap_invoice_payments.accounting_date%TYPE,
+    discount_taken            ap_invoice_payments.discount_taken%TYPE,
+    discount_lost             ap_invoice_payments.discount_lost%TYPE,
+    invoice_base_amount       ap_invoice_payments.invoice_base_amount%TYPE,
+    payment_base_amount       ap_invoice_payments.payment_base_amount%TYPE,
+    accrual_posted_flag       ap_invoice_payments.accrual_posted_flag%TYPE,
+    cash_posted_flag          ap_invoice_payments.cash_posted_flag%TYPE,
+    posted_flag               ap_invoice_payments.posted_flag%TYPE,
+    set_of_books_id           ap_invoice_payments.set_of_books_id%TYPE,
+    last_updated_by           ap_invoice_payments.last_updated_by%TYPE,
+    last_update_login         ap_invoice_payments.last_update_login%TYPE,
+    currency_code             VARCHAR2(30),
+    base_currency_code        VARCHAR2(30),
+    exchange_rate             ap_invoice_payments.exchange_rate%TYPE,
+    exchange_rate_type        ap_invoice_payments.exchange_rate_type%TYPE,
+    exchange_date             ap_invoice_payments.exchange_date%TYPE,
+    ce_bank_acct_use_id       NUMBER,
+    bank_account_num          ap_invoice_payments.bank_account_num%TYPE,
+    bank_account_type         ap_invoice_payments.bank_account_type%TYPE,
+    bank_num                  ap_invoice_payments.bank_num%TYPE,
+    future_pay_posted_flag    ap_invoice_payments.future_pay_posted_flag%TYPE,
+    exclusive_payment_flag    VARCHAR2(30),
+    accts_pay_ccid            NUMBER,
+    gain_ccid                 NUMBER,
+    loss_ccid                 NUMBER,
+    future_pay_ccid           NUMBER,
+    asset_ccid                NUMBER,
+    payment_dists_flag        VARCHAR2(30),
+    payment_mode              VARCHAR2(50),
+    replace_flag              VARCHAR2(30),
+    attribute1                ap_invoice_payments.attribute1%TYPE,
+    attribute2                ap_invoice_payments.attribute2%TYPE,
+    attribute3                ap_invoice_payments.attribute3%TYPE,
+    attribute4                ap_invoice_payments.attribute4%TYPE,
+    attribute5                ap_invoice_payments.attribute5%TYPE,
+    attribute6                ap_invoice_payments.attribute6%TYPE,
+    attribute7                ap_invoice_payments.attribute7%TYPE,
+    attribute8                ap_invoice_payments.attribute8%TYPE,
+    attribute9                ap_invoice_payments.attribute9%TYPE,
+    attribute10               ap_invoice_payments.attribute10%TYPE,
+    attribute11               ap_invoice_payments.attribute11%TYPE,
+    attribute12               ap_invoice_payments.attribute12%TYPE,
+    attribute13               ap_invoice_payments.attribute13%TYPE,
+    attribute14               ap_invoice_payments.attribute14%TYPE,
+    attribute15               ap_invoice_payments.attribute15%TYPE,
+    attribute_category        ap_invoice_payments.attribute_category%TYPE,
+    global_attribute1         ap_invoice_payments.global_attribute1%TYPE,
+    global_attribute2         ap_invoice_payments.global_attribute2%TYPE,
+    global_attribute3         ap_invoice_payments.global_attribute3%TYPE,
+    global_attribute4         ap_invoice_payments.global_attribute4%TYPE,
+    global_attribute5         ap_invoice_payments.global_attribute5%TYPE,
+    global_attribute6         ap_invoice_payments.global_attribute6%TYPE,
+    global_attribute7         ap_invoice_payments.global_attribute7%TYPE,
+    global_attribute8         ap_invoice_payments.global_attribute8%TYPE,
+    global_attribute9         ap_invoice_payments.global_attribute9%TYPE,
+    global_attribute10        ap_invoice_payments.global_attribute10%TYPE,
+    global_attribute11        ap_invoice_payments.global_attribute11%TYPE,
+    global_attribute12        ap_invoice_payments.global_attribute12%TYPE,
+    global_attribute13        ap_invoice_payments.global_attribute13%TYPE,
+    global_attribute14        ap_invoice_payments.global_attribute14%TYPE,
+    global_attribute15        ap_invoice_payments.global_attribute15%TYPE,
+    global_attribute16        ap_invoice_payments.global_attribute16%TYPE,
+    global_attribute17        ap_invoice_payments.global_attribute17%TYPE,
+    global_attribute18        ap_invoice_payments.global_attribute18%TYPE,
+    global_attribute19        ap_invoice_payments.global_attribute19%TYPE,
+    global_attribute20        ap_invoice_payments.global_attribute20%TYPE,
+    global_attribute_category ap_invoice_payments.global_attribute_category%TYPE,
+    calling_sequence          VARCHAR2(50),
+    org_id                    ap_invoice_payments.org_id%TYPE);
+    
+
+  
+ 
+  
+ g_exception     exception;             --∂®“Â»´æ÷“Ï≥££¨∏˜π˝≥Ãπ≤”√
+  
+
+   PROCEDURE insert_invoice  (
+            --  p_INVOICE_ID              	  IN      NUMBER,    
+              p_INVOICE_NUM                   OUT      VARCHAR,  
+              p_VENDOR_ID                     IN      NUMBER,    
+              p_VENDOR_SITE_ID                IN      NUMBER,    
+              p_INVOICE_AMOUNT                 IN      NUMBER,        
+          --    p_INVOICE_TYPE_LOOKUP_CODE    IN      VARCHAR,  
+              p_VENDOR_NAME                   IN        VARCHAR, 
+              p_INVOICE_CURRENCY_CODE         IN        VARCHAR,  
+              p_EXCHANGE_RATE                 IN        NUMBER,        
+              p_ORG_ID                        IN        NUMBER,    
+            --  p_SOURCE                        IN        VARCHAR,  
+              p_INVOICE_DATE                  IN        DATE,          
+              p_EXCHANGE_RATE_TYPE            IN        VARCHAR,
+              p_CASH_ITEMS_TRANSFER           in        varchar2,
+              p_dist_code_combination_id_t    in        number,
+              
+              p_status                        out       varchar,
+              p_msg                           out       varchar,
+              p_invoice_error_msg             out       varchar,
+              p_INVOICE_ID                    out       number
+          )is 
+         
+        
+        l_iface_rec           ap_invoices_interface%ROWTYPE;    --º«¬º∑¢∆±Õ∑
+        l_iface_lines_rec     ap_invoice_lines_interface%ROWTYPE;   --º«¬º∑¢∆±––
+        l_INVOICE_ID        NUMBER;
+				l_INVOICE_LINE_ID   NUMBER;
+        l_user_id           NUMBER  := fnd_global.user_id;
+        l_login_id          NUMBER  := fnd_global.login_id; 
+        l_org_id            number  :=  p_ORG_ID;
+        x_invoice_id             number;
+        x_invoice_date           date;
+				l_INVOICE_NUM        varchar(50);   
+        l_invoice_num_Seq    number;    --∑¢∆±¡˜ÀÆ∫≈
+      
+        
+        --≤Â»Î∑¢∆±Õ∑     
+        BEGIN  
+              
+              BEGIN
+                
+              
+              select invoice_num_Seq.NEXTVAL into l_invoice_num_Seq  FROM dual;
+              
+               l_INVOICE_NUM    :=  lpad(l_invoice_num_Seq, 5, '0')||'-'|| p_ORG_ID;--…˙≥…”¶∏∂∑¢∆±±‡∫≈
+              
+														  
+												 
+              
+                SELECT ap_invoices_interface_s.NEXTVAL  INTO  l_INVOICE_ID  FROM dual; --∑¢∆±––id
+                
+                l_iface_rec.LAST_UPDATED_BY            :=  l_user_id;
+                l_iface_rec.CREATION_DATE              :=  SYSDATE;
+                l_iface_rec.CREATED_BY                 :=  l_user_id;
+                l_iface_rec.LAST_UPDATE_LOGIN          :=  l_login_id; 
+                l_iface_rec.LAST_UPDATE_DATE           :=  SYSDATE;
+                l_iface_rec.INVOICE_ID                 :=  l_INVOICE_ID              ;       
+                l_iface_rec.INVOICE_NUM                :=  l_INVOICE_NUM;
+                l_iface_rec.VENDOR_ID                  :=  p_VENDOR_ID         ;
+                l_iface_rec.VENDOR_SITE_ID             :=   p_VENDOR_SITE_ID      ;
+                l_iface_rec.INVOICE_AMOUNT             :=   p_INVOICE_AMOUNT      ;
+                l_iface_rec.INVOICE_TYPE_LOOKUP_CODE   :=  'STANDARD' ;
+                l_iface_rec.VENDOR_NAME                :=   p_VENDOR_NAME               ;
+                l_iface_rec.INVOICE_CURRENCY_CODE      :=   p_INVOICE_CURRENCY_CODE     ;
+                l_iface_rec.EXCHANGE_RATE              :=   p_EXCHANGE_RATE             ;
+                l_iface_rec.ORG_ID                     :=   p_ORG_ID                    ;
+                l_iface_rec.SOURCE                     :=   'Intercompany'              ;
+                l_iface_rec.INVOICE_DATE               :=   p_INVOICE_DATE              ;
+                l_iface_rec.EXCHANGE_RATE_TYPE         :=   p_EXCHANGE_RATE_TYPE        ;
+                l_iface_rec.workflow_flag              :=   'D';
+                l_iface_rec.payment_method_lookup_code :=   'CHECK';
+                l_iface_rec.attribute10                :=   'cash_transfer';
+                
+                INSERT INTO ap_invoices_interface VALUES l_iface_rec; 
+                
+              END insert_invoice_header;
+              
+        
+        
+        --≤Â»Î∑¢∆±––
+    
+    
+               
+              BEGIN  
+                  select ap_invoice_lines_interface_s.nextval into l_INVOICE_LINE_ID from dual; --∑¢∆±––id
+                  l_iface_lines_rec.LAST_UPDATE_DATE      := SYSDATE;
+                  l_iface_lines_rec.LAST_UPDATED_BY       := l_user_id;
+                  l_iface_lines_rec.CREATION_DATE       := SYSDATE;
+                  l_iface_lines_rec.CREATED_BY        := l_user_id;
+                  l_iface_lines_rec.LAST_UPDATE_LOGIN     := l_login_id;
+                  l_iface_lines_rec.INVOICE_ID        := l_INVOICE_ID;
+                  l_iface_lines_rec.LINE_TYPE_LOOKUP_CODE    := 'ITEM';
+                  l_iface_lines_rec.AMOUNT          := p_INVOICE_AMOUNT;
+                  l_iface_lines_rec.invoice_line_id  := l_INVOICE_LINE_ID ;
+                  l_iface_lines_rec.dist_code_combination_id   := p_dist_code_combination_id_t;
+                  l_iface_lines_rec.line_number                   := 1;
+                  l_iface_lines_rec.accounting_date               := p_INVOICE_DATE;
+                  l_iface_lines_rec.dist_code_concatenated        := null;
+                  l_iface_lines_rec.amount_includes_tax_flag      := 'N';
+                  l_iface_lines_rec.attribute10                   :='cash_transfer';
+                  
+                    
+                   INSERT INTO ap_invoice_lines_interface VALUES l_iface_lines_rec;
+              END insert_invoice_lines;
+           
+              
+              
+              
+              
+        
+          
+              declare
+
+                  v_import_flag              BOOLEAN;
+                  v_batch_error_flag         varchar2(20);
+                  v_invoices_fetched         number;
+                  v_invoices_created         number;
+                  v_total_amount             number;
+                  v_print_batch              varchar2(200);
+         
+                  x_holds_count              number;
+                  x_approval_status          varchar2(20);
+   
+                  p_funds_return_code        varchar2(30);
+              begin
+               
+               --mo_global.set_policy_context('M','');
+                mo_global.init('SQLAP');
+                mo_global.set_policy_context('S', p_org_id);
+              /* APPS.FND_GLOBAL.APPS_INITIALIZE(user_id => 1110,
+                                                  resp_id => 50718,
+                                                  RESP_APPL_ID => 200);*/
+              v_import_flag := ap_import_invoices_pkg.import_invoices(p_batch_name             => '201701π´Àæº‰◊ Ωµ˜≤¶',
+                                                                      p_gl_date                => null,--null
+                                                                      p_hold_code              => null,
+                                                                      p_hold_reason            => null,
+                                                                      p_commit_cycles          => null,
+                                                                      p_source                 => 'Intercompany',
+                                                                      p_group_id               => null,
+                                                                      p_conc_request_id        => null,
+                                                                      p_debug_switch           => null,
+                                                                      p_org_id                 => l_org_id ,
+                                                                      p_batch_error_flag       => v_batch_error_flag,  --out
+                                                                      p_invoices_fetched       => v_invoices_fetched,  --out
+                                                                      p_invoices_created       => v_invoices_created,  --out
+                                                                      p_total_invoice_amount   => v_total_amount,      --out
+                                                                      p_print_batch            => v_print_batch,       --out
+                                                                      p_calling_sequence       => null,
+                                                                      p_invoice_interface_id   => null,
+                                                                      p_needs_invoice_approval => 'Y',
+                                                                      p_commit                 => 'N');
+                                                              
+                         commit;
+            
+            if v_import_flag AND v_invoices_created = '1'  then 
+          
+                    
+                    p_status       :='S';
+                    p_msg          := '∑¢∆±¥´ÀÕ≥…π¶ ';
+                    p_INVOICE_NUM  :=l_INVOICE_NUM;
+       
+		                --∏¸–¬∑¢∆±¿‡–Õ   
+                    BEGIN
+                                    select aia.invoice_id
+                                          ,aia.invoice_date
+                                      into x_invoice_id
+                                          ,x_invoice_date
+                                      from ap_invoices_all aia
+                                     where aia.invoice_num = l_INVOICE_NUM  
+                                       and aia.org_id = P_org_id;
+                                       
+                                    update ap_invoices_all aia
+                                       set aia.invoice_type_lookup_code = 'PREPAYMENT'
+                                          ,aia.earliest_settlement_date = x_invoice_date
+                                     where aia.invoice_id = x_invoice_id;
+                             
+                                      p_INVOICE_ID :=  x_invoice_id;--Ω´≥…π¶µƒ∑¢∆±id∑µªÿ∏¯µ˜”√π˝≥Ã
+                                 
+                                
+                                 
+                    EXCEPTION
+                      WHEN OTHERS THEN
+                         p_msg  :='∏¸–¬∑¢∆±¿‡–Õ ß∞‹';
+                         RAISE g_exception;
+                         
+                    END;
+                    
+                    
+                   
+                       
+                         
+                        
+                    
+                      
+                     
+                   --—È÷§∑¢∆±  
+                     ap_approval_pkg.approve(p_run_option         => 'ALL'
+                                             ,p_invoice_batch_id   => null
+                                             ,p_begin_invoice_date => null
+                                             ,p_end_invoice_date   => null
+                                             ,p_vendor_id          => null
+                                             ,p_pay_group          => ''
+                                             ,p_invoice_id         => x_invoice_id
+                                             ,p_entered_by         => null
+                                             ,p_set_of_books_id    => null
+                                             ,p_trace_option       => 'N'
+                                             ,p_conc_flag          => 'N'
+                                             ,p_holds_count        => x_holds_count        --out
+                                             ,p_approval_status    => x_approval_status    --out
+                                             ,p_funds_return_code   => p_funds_return_code --out
+                                              ,p_calling_sequence   => null);
+              
+                     p_msg := p_msg ||'∑¢∆±—È÷§◊¥Ã¨' ||  x_approval_status;
+                     commit;
+              else 
+                   p_status :='E';
+							  	 p_msg    :='µº»Îπ˝≥Ã÷–∑¢…˙¥ÌŒÛ';
+                   
+                   
+                    
+																			
+                 --≤È—Ø∑¢∆±Ω”ø⁄Õ∑¥ÌŒÛ–≈œ¢
+                   begin
+                            select displayed_field into p_invoice_error_msg
+                            from  AP_LOOKUP_CODES WHERE LOOKUP_TYPE = 'REJECT CODE'
+                             and lookup_code  = (select reject_lookup_code  from
+                              AP_INTERFACE_REJECTIONS  where parent_id = l_INVOICE_ID);
+                    EXCEPTION
+                         when NO_DATA_FOUND then
+																									  
+                           --≤È—Ø∑¢∆±Ω”ø⁄––¥ÌŒÛ–≈œ¢
+                              begin   
+                                    select displayed_field into p_invoice_error_msg
+                                  from  AP_LOOKUP_CODES WHERE LOOKUP_TYPE = 'REJECT CODE'
+                                   and lookup_code  = (select reject_lookup_code  from
+                                    AP_INTERFACE_REJECTIONS  where parent_id = l_INVOICE_LINE_ID);
+                                    
+                               exception
+                                    when others then
+                                     
+                                          p_msg  := '∑¢∆±¥¥Ω® ß∞‹';
+                                          RAISE g_exception;
+                               end;
+                              
+                    END;
+                  rollback;
+            end if;
+        end  call_import_api;   
+  --     begin
+    --  null;
+      
+    
+              declare 
+                  l_combination_seg4   varchar(30);  --Õ˘¿¥’Àªßπ´Àæº‰∂Œ
+                begin
+                select segment4 into  l_combination_seg4 
+                       from gl_code_combinations_kfv 
+                          where code_combination_id = p_dist_code_combination_id_t;
+    
+          --∏¸–¬∑¢∆±∑÷≈‰––       
+                           update  AP_INVOICE_DISTRIBUTIONS_all 
+                                  set attribute12 = p_CASH_ITEMS_TRANSFER,
+                                       attribute11 ='Y' ,
+                                       attribute13 = l_combination_seg4   
+                               WHERE INVOICE_ID = x_invoice_id  and distribution_line_number = 1;  
+                 exception
+                     when others then
+                        p_status := 'E';
+                        p_msg    := '∏¸–¬∑¢∆±∑÷≈‰–– ß∞‹';
+                        raise g_exception;
+               end;
+                   commit;                  
+    
+       exception  
+           when g_exception then 
+											  rollback;
+              return;
+              
+              
+            
+    
+                                          
+            
+      END insert_invoice;
+      
+      
+      
+      
+      
+  FUNCTION get_application_events(pi_org_id         IN NUMBER,
+                                      pi_user_id        IN NUMBER,
+                                      pi_resp_id        IN NUMBER,
+                                      pi_appl_id        IN NUMBER,
+                                      pi_doc_type       IN VARCHAR2,
+                                      pi_doc_id         IN NUMBER,
+                                      pi_check_date     IN DATE,
+                                      po_return_status  OUT VARCHAR2,
+                                      po_return_message OUT VARCHAR2) 
+                                      RETURN NUMBER IS
+                                      
+                x_event_type          VARCHAR2(10) := 'PAYMENT';
+                x_accounting_date     DATE := pi_check_date;
+                x_accounting_event_id NUMBER;
+                x_checkrun_name       VARCHAR2(20);
+                x_calling_sequence    VARCHAR2(20);
+          BEGIN
+            po_return_status := 'S';
+          
+            BEGIN
+              fnd_client_info.set_org_context(pi_org_id);
+              fnd_global.apps_initialize(pi_user_id, pi_resp_id, pi_appl_id, 0);
+              ap_accounting_events_pkg.create_events ( x_event_type,
+                                                       pi_doc_type, --'M'
+                                                       pi_doc_id,
+                                                       x_accounting_date,
+                                                       x_accounting_event_id,
+                                                       x_checkrun_name,
+                                                       x_calling_sequence);
+            
+              RETURN x_accounting_event_id;
+            EXCEPTION
+              WHEN OTHERS THEN
+                ROLLBACK;
+                po_return_message := SQLERRM;
+                po_return_status  := 'E';
+                RETURN 0;
+            END;
+          END;    
+      
+      
+  PROCEDURE create_check_header(pi_check_header_rec    IN  r_check_header_rec,
+                                po_check_id            OUT NUMBER, -- ‰≥ˆ£∫∏∂øÓid
+                                po_check_num           OUT VARCHAR2, -- ‰≥ˆ£∫∏∂øÓ±‡∫≈
+                                po_accounting_event_id OUT NUMBER, -- ‰≥ˆ£∫º«’Àid
+                                po_return_status       OUT VARCHAR2,
+                                po_return_message      OUT VARCHAR2) IS
+  
+                v_row_id              VARCHAR2(50);
+                v_base_amount         NUMBER;
+                v_accounting_event_id NUMBER;
+                x_return_status       VARCHAR2(10);
+                x_return_message      VARCHAR2(1000);
+             BEGIN
+                po_return_status :='S';
+  
+                v_base_amount := pi_check_header_rec.amount * pi_check_header_rec.exchange_rate;
+  
+                ap_checks_pkg.insert_row(  x_rowid                        => v_row_id,
+                                           x_amount                       => pi_check_header_rec.amount,
+                                           x_ce_bank_acct_use_id          => pi_check_header_rec.ce_bank_acct_use_id,
+                                           x_bank_account_name            => pi_check_header_rec.bank_account_name,
+                                           x_check_date                   => pi_check_header_rec.check_date,
+                                           x_check_id                     => pi_check_header_rec.check_id,
+                                           x_check_number                 => pi_check_header_rec.check_number,
+                                           x_currency_code                => pi_check_header_rec.currency_code,
+                                           x_last_updated_by              => pi_check_header_rec.last_updated_by, --fnd_global.user_id
+                                           x_last_update_date             => pi_check_header_rec.last_update_date,
+                                           x_payment_type_flag            => pi_check_header_rec.payment_type_flag, --'M'
+                                           x_address_line1                => pi_check_header_rec.address_line1,
+                                           x_address_line2                => pi_check_header_rec.address_line2,
+                                           x_address_line3                => pi_check_header_rec.address_line3,
+                                           x_checkrun_name                => pi_check_header_rec.checkrun_name,
+                                           x_check_format_id              => pi_check_header_rec.check_format_id,
+                                           x_check_stock_id               => pi_check_header_rec.check_stock_id,
+                                           x_city                         => pi_check_header_rec.city,
+                                           x_country                      => pi_check_header_rec.country,
+                                           x_created_by                   => pi_check_header_rec.created_by, --fnd_global.user_id
+                                           x_creation_date                => pi_check_header_rec.creation_date,
+                                           x_last_update_login            => pi_check_header_rec.last_update_login,
+                                           x_status_lookup_code           => pi_check_header_rec.status_lookup_code,
+                                           x_vendor_name                  => pi_check_header_rec.vendor_name,
+                                           x_vendor_site_code             => pi_check_header_rec.vendor_site_code,
+                                           x_external_bank_account_id     => pi_check_header_rec.external_bank_account_id,
+                                           x_zip                          => pi_check_header_rec.zip,
+                                           x_bank_account_num             => pi_check_header_rec.bank_account_num,
+                                           x_bank_account_type            => pi_check_header_rec.bank_account_type,
+                                           x_bank_num                     => pi_check_header_rec.bank_num,
+                                           x_check_voucher_num            => pi_check_header_rec.check_voucher_num,
+                                           x_cleared_amount               => pi_check_header_rec.cleared_amount,
+                                           x_cleared_date                 => pi_check_header_rec.cleared_date,
+                                           x_doc_category_code            => pi_check_header_rec.doc_category_code,
+                                           x_doc_sequence_id              => pi_check_header_rec.doc_sequence_id,
+                                           x_doc_sequence_value           => pi_check_header_rec.doc_sequence_value,
+                                           x_province                     => pi_check_header_rec.province,
+                                           x_released_date                => pi_check_header_rec.released_date,
+                                           x_released_by                  => pi_check_header_rec.released_by,
+                                           x_state                        => pi_check_header_rec.state,
+                                           x_stopped_date                 => pi_check_header_rec.stopped_date,
+                                           x_stopped_by                   => pi_check_header_rec.stopped_by,
+                                           x_void_date                    => pi_check_header_rec.void_date,
+                                           x_attribute1                   => pi_check_header_rec.attribute1,
+                                           x_attribute10                  => pi_check_header_rec.attribute10,
+                                           x_attribute11                  => pi_check_header_rec.attribute11,
+                                           x_attribute12                  => pi_check_header_rec.attribute12,
+                                           x_attribute13                  => pi_check_header_rec.attribute13,
+                                           x_attribute14                  => pi_check_header_rec.attribute14,
+                                           x_attribute15                  => pi_check_header_rec.attribute15,
+                                           x_attribute2                   => pi_check_header_rec.attribute2,
+                                           x_attribute3                   => pi_check_header_rec.attribute3,
+                                           x_attribute4                   => pi_check_header_rec.attribute4,
+                                           x_attribute5                   => pi_check_header_rec.attribute5,
+                                           x_attribute6                   => pi_check_header_rec.attribute6,
+                                           x_attribute7                   => pi_check_header_rec.attribute7,
+                                           x_attribute8                   => pi_check_header_rec.attribute8,
+                                           x_attribute9                   => pi_check_header_rec.attribute9,
+                                           x_attribute_category           => pi_check_header_rec.attribute_category,
+                                           x_description                  => pi_check_header_rec.description,
+                                           x_future_pay_due_date          => pi_check_header_rec.future_pay_due_date,
+                                           x_treasury_pay_date            => pi_check_header_rec.treasury_pay_date,
+                                           x_treasury_pay_number          => pi_check_header_rec.treasury_pay_number,
+                                           x_withholding_status_lkup_code => pi_check_header_rec.withholding_status_lkup_code,
+                                           x_reconciliation_batch_id      => pi_check_header_rec.reconciliation_batch_id,
+                                           x_cleared_base_amount          => pi_check_header_rec.cleared_base_amount,
+                                           x_cleared_exchange_rate        => pi_check_header_rec.cleared_exchange_rate,
+                                           x_cleared_exchange_date        => pi_check_header_rec.cleared_exchange_date,
+                                           x_cleared_exchange_rate_type   => pi_check_header_rec.cleared_exchange_rate_type,
+                                           x_address_line4                => pi_check_header_rec.address_line4,
+                                           x_county                       => pi_check_header_rec.county,
+                                           x_address_style                => pi_check_header_rec.address_style,
+                                           x_org_id                       => pi_check_header_rec.org_id,
+                                           x_vendor_id                    => pi_check_header_rec.vendor_id,
+                                           x_vendor_site_id               => pi_check_header_rec.vendor_site_id,
+                                           x_exchange_rate                => pi_check_header_rec.exchange_rate,
+                                           x_exchange_date                => pi_check_header_rec.exchange_date,
+                                           x_exchange_rate_type           => pi_check_header_rec.exchange_rate_type,
+                                           x_base_amount                  => pi_check_header_rec.base_amount,
+                                           x_checkrun_id                  => pi_check_header_rec.checkrun_id,
+                                           x_global_attribute_category    => pi_check_header_rec.global_attribute_category,
+                                           x_global_attribute1            => pi_check_header_rec.global_attribute1,
+                                           x_global_attribute2            => pi_check_header_rec.global_attribute2,
+                                           x_global_attribute3            => pi_check_header_rec.global_attribute3,
+                                           x_global_attribute4            => pi_check_header_rec.global_attribute4,
+                                           x_global_attribute5            => pi_check_header_rec.global_attribute5,
+                                           x_global_attribute6            => pi_check_header_rec.global_attribute6,
+                                           x_global_attribute7            => pi_check_header_rec.global_attribute7,
+                                           x_global_attribute8            => pi_check_header_rec.global_attribute8,
+                                           x_global_attribute9            => pi_check_header_rec.global_attribute9,
+                                           x_global_attribute10           => pi_check_header_rec.global_attribute10,
+                                           x_global_attribute11           => pi_check_header_rec.global_attribute11,
+                                           x_global_attribute12           => pi_check_header_rec.global_attribute12,
+                                           x_global_attribute13           => pi_check_header_rec.global_attribute13,
+                                           x_global_attribute14           => pi_check_header_rec.global_attribute14,
+                                           x_global_attribute15           => pi_check_header_rec.global_attribute15,
+                                           x_global_attribute16           => pi_check_header_rec.global_attribute16,
+                                           x_global_attribute17           => pi_check_header_rec.global_attribute17,
+                                           x_global_attribute18           => pi_check_header_rec.global_attribute18,
+                                           x_global_attribute19           => pi_check_header_rec.global_attribute19,
+                                           x_global_attribute20           => pi_check_header_rec.global_attribute20,
+                                           x_transfer_priority            => pi_check_header_rec.transfer_priority,
+                                           x_maturity_exchange_rate_type  => pi_check_header_rec.maturity_exchange_rate_type,
+                                           x_maturity_exchange_date       => pi_check_header_rec.maturity_exchange_date,
+                                           x_maturity_exchange_rate       => pi_check_header_rec.maturity_exchange_rate,
+                                           x_anticipated_value_date       => pi_check_header_rec.anticipated_value_date,
+                                           x_actual_value_date            => pi_check_header_rec.actual_value_date,
+                                           x_payment_method_code          => pi_check_header_rec.payment_method_code,
+                                           x_payment_profile_id           => pi_check_header_rec.payment_profile_id,
+                                           x_bank_charge_bearer           => pi_check_header_rec.bank_charge_bearer,
+                                           x_settlement_priority          => pi_check_header_rec.settlement_priority,
+                                           x_payment_document_id          => pi_check_header_rec.payment_document_id,
+                                           x_party_id                     => pi_check_header_rec.party_id,
+                                           x_party_site_id                => pi_check_header_rec.party_site_id,
+                                           x_legal_entity_id              => pi_check_header_rec.legal_entity_id,
+                                           x_payment_id                   => pi_check_header_rec.payment_id,
+                                           x_calling_sequence             => pi_check_header_rec.calling_sequence,
+                                           x_remit_to_supplier_name       => pi_check_header_rec.remit_to_supplier_name,
+                                           x_remit_to_supplier_id         => pi_check_header_rec.remit_to_supplier_id,
+                                           x_remit_to_supplier_site       => pi_check_header_rec.remit_to_supplier_site,
+                                           x_remit_to_supplier_site_id    => pi_check_header_rec.remit_to_supplier_site_id,
+                                           x_relationship_id              => pi_check_header_rec.relationship_id,
+                                           x_paycard_authorization_number => pi_check_header_rec.paycard_authorization_number,
+                                           x_paycard_reference_id         => pi_check_header_rec.paycard_reference_id);
+  
+    UPDATE ce_payment_documents
+    SET    last_issued_document_number = pi_check_header_rec.check_number,
+           last_update_date            = pi_check_header_rec.last_update_date,
+           last_updated_by             = pi_check_header_rec.last_updated_by
+    WHERE  payment_document_id = pi_check_header_rec.payment_document_id;
+  
+    v_accounting_event_id := get_application_events(pi_org_id         => pi_check_header_rec.org_id,
+                                                    pi_user_id        => fnd_global.user_id,
+                                                    pi_resp_id        => fnd_global.resp_id,
+                                                    pi_appl_id        => fnd_global.resp_appl_id,
+                                                    pi_doc_type       => pi_check_header_rec.payment_type_flag,
+                                                    pi_doc_id         => pi_check_header_rec.check_id,
+                                                    pi_check_date     => pi_check_header_rec.check_date,
+                                                    po_return_status  => x_return_status,
+                                                    po_return_message => x_return_message);
+  
+    --added by best.ahung on 20120806
+    ap_reconciliation_pkg.insert_payment_history(x_check_id                    => pi_check_header_rec.check_id,
+                                                 x_transaction_type            => 'PAYMENT CREATED', --p_transaction_type, 
+                                                 x_accounting_date             => pi_check_header_rec.check_date,
+                                                 x_trx_bank_amount             => NULL,
+                                                 x_errors_bank_amount          => NULL,
+                                                 x_charges_bank_amount         => NULL,
+                                                 x_bank_currency_code          => NULL,
+                                                 x_bank_to_base_xrate_type     => NULL,
+                                                 x_bank_to_base_xrate_date     => NULL,
+                                                 x_bank_to_base_xrate          => NULL,
+                                                 x_trx_pmt_amount              => pi_check_header_rec.amount,
+                                                 x_errors_pmt_amount           => NULL,
+                                                 x_charges_pmt_amount          => NULL,
+                                                 x_pmt_currency_code           => pi_check_header_rec.currency_code,
+                                                 x_pmt_to_base_xrate_type      => pi_check_header_rec.exchange_rate_type,
+                                                 x_pmt_to_base_xrate_date      => pi_check_header_rec.exchange_date,
+                                                 x_pmt_to_base_xrate           => pi_check_header_rec.exchange_rate,
+                                                 x_trx_base_amount             => v_base_amount,
+                                                 x_errors_base_amount          => NULL,
+                                                 x_charges_base_amount         => NULL,
+                                                 x_matched_flag                => NULL,
+                                                 x_rev_pmt_hist_id             => NULL,
+                                                 x_creation_date               => SYSDATE,
+                                                 x_created_by                  => fnd_global.user_id,
+                                                 x_last_update_date            => SYSDATE,
+                                                 x_last_updated_by             => fnd_global.user_id,
+                                                 x_last_update_login           => fnd_global.login_id,
+                                                 x_program_update_date         => NULL,
+                                                 x_program_application_id      => NULL,
+                                                 x_program_id                  => NULL,
+                                                 x_request_id                  => NULL,
+                                                 x_calling_sequence            => 'APXPAWKB (pay_sum_folder_pkg_i.insert_row)',
+                                                 x_accounting_event_id         => v_accounting_event_id,
+                                                 x_org_id                      => pi_check_header_rec.org_id,
+                                                 x_invoice_adjustment_event_id => NULL);
+  
+    po_check_id            := pi_check_header_rec.check_id;
+    po_check_num           := pi_check_header_rec.check_number;
+    po_accounting_event_id := v_accounting_event_id;
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      po_return_status  := 'E';
+      po_return_message := SQLERRM;
+  END;
+  
+  
+  PROCEDURE create_check_line(pi_check_line_rec      IN  r_check_line_rec,
+                              pi_check_id            IN NUMBER,
+                              pi_accounting_event_id IN NUMBER,
+                              pi_invoice_id          IN NUMBER,
+                              pi_amount              IN NUMBER,
+                              po_invoice_payment_id  OUT NUMBER, --∏∂øÓ––ID
+                              po_return_status       OUT VARCHAR2,
+                              po_return_message      OUT VARCHAR2) IS
+  
+  BEGIN
+    po_return_status := 'S';
+  
+    ap_pay_invoice_pkg.ap_pay_invoice(p_invoice_id                => pi_invoice_id,
+                                      p_check_id                  => pi_check_id,
+                                      p_payment_num               => pi_check_line_rec.payment_num,
+                                      p_invoice_payment_id        => pi_check_line_rec.invoice_payment_id,
+                                      p_old_invoice_payment_id    => pi_check_line_rec.old_invoice_payment_id,
+                                      p_period_name               => pi_check_line_rec.period_name,
+                                      p_invoice_type              => pi_check_line_rec.invoice_type,
+                                      p_accounting_date           => pi_check_line_rec.accounting_date,
+                                      p_amount                    => pi_amount,
+                                      p_discount_taken            => pi_check_line_rec.discount_taken,
+                                      p_discount_lost             => pi_check_line_rec.discount_lost,
+                                      p_invoice_base_amount       => pi_check_line_rec.invoice_base_amount,
+                                      p_payment_base_amount       => pi_check_line_rec.payment_base_amount,
+                                      p_accrual_posted_flag       => pi_check_line_rec.accrual_posted_flag,
+                                      p_cash_posted_flag          => pi_check_line_rec.cash_posted_flag,
+                                      p_posted_flag               => pi_check_line_rec.posted_flag,
+                                      p_set_of_books_id           => pi_check_line_rec.set_of_books_id,
+                                      p_last_updated_by           => pi_check_line_rec.last_updated_by,
+                                      p_last_update_login         => pi_check_line_rec.last_update_login,
+                                      p_currency_code             => pi_check_line_rec.currency_code,
+                                      p_base_currency_code        => pi_check_line_rec.base_currency_code,
+                                      p_exchange_rate             => pi_check_line_rec.exchange_rate,
+                                      p_exchange_rate_type        => pi_check_line_rec.exchange_rate_type,
+                                      p_exchange_date             => pi_check_line_rec.exchange_date,
+                                      p_ce_bank_acct_use_id       => pi_check_line_rec.ce_bank_acct_use_id,
+                                      p_bank_account_num          => pi_check_line_rec.bank_account_num,
+                                      p_bank_account_type         => pi_check_line_rec.bank_account_type,
+                                      p_bank_num                  => pi_check_line_rec.bank_num,
+                                      p_future_pay_posted_flag    => pi_check_line_rec.future_pay_posted_flag,
+                                      p_exclusive_payment_flag    => pi_check_line_rec.exclusive_payment_flag,
+                                      p_accts_pay_ccid            => pi_check_line_rec.accts_pay_ccid,
+                                      p_gain_ccid                 => pi_check_line_rec.gain_ccid,
+                                      p_loss_ccid                 => pi_check_line_rec.loss_ccid,
+                                      p_future_pay_ccid           => pi_check_line_rec.future_pay_ccid,
+                                      p_asset_ccid                => pi_check_line_rec.asset_ccid,
+                                      p_payment_dists_flag        => pi_check_line_rec.payment_dists_flag,
+                                      p_payment_mode              => pi_check_line_rec.payment_mode,
+                                      p_replace_flag              => pi_check_line_rec.replace_flag,
+                                      p_attribute1                => pi_check_line_rec.attribute1,
+                                      p_attribute2                => pi_check_line_rec.attribute2,
+                                      p_attribute3                => pi_check_line_rec.attribute3,
+                                      p_attribute4                => pi_check_line_rec.attribute4,
+                                      p_attribute5                => pi_check_line_rec.attribute5,
+                                      p_attribute6                => pi_check_line_rec.attribute6,
+                                      p_attribute7                => pi_check_line_rec.attribute7,
+                                      p_attribute8                => pi_check_line_rec.attribute8,
+                                      p_attribute9                => pi_check_line_rec.attribute9,
+                                      p_attribute10               => pi_check_line_rec.attribute10,
+                                      p_attribute11               => pi_check_line_rec.attribute11,
+                                      p_attribute12               => pi_check_line_rec.attribute12,
+                                      p_attribute13               => pi_check_line_rec.attribute13,
+                                      p_attribute14               => pi_check_line_rec.attribute14,
+                                      p_attribute15               => pi_check_line_rec.attribute15,
+                                      p_attribute_category        => pi_check_line_rec.attribute_category,
+                                      p_global_attribute1         => pi_check_line_rec.global_attribute1,
+                                      p_global_attribute2         => pi_check_line_rec.global_attribute2,
+                                      p_global_attribute3         => pi_check_line_rec.global_attribute3,
+                                      p_global_attribute4         => pi_check_line_rec.global_attribute4,
+                                      p_global_attribute5         => pi_check_line_rec.global_attribute5,
+                                      p_global_attribute6         => pi_check_line_rec.global_attribute6,
+                                      p_global_attribute7         => pi_check_line_rec.global_attribute7,
+                                      p_global_attribute8         => pi_check_line_rec.global_attribute8,
+                                      p_global_attribute9         => pi_check_line_rec.global_attribute9,
+                                      p_global_attribute10        => pi_check_line_rec.global_attribute10,
+                                      p_global_attribute11        => pi_check_line_rec.global_attribute11,
+                                      p_global_attribute12        => pi_check_line_rec.global_attribute12,
+                                      p_global_attribute13        => pi_check_line_rec.global_attribute13,
+                                      p_global_attribute14        => pi_check_line_rec.global_attribute14,
+                                      p_global_attribute15        => pi_check_line_rec.global_attribute15,
+                                      p_global_attribute16        => pi_check_line_rec.global_attribute16,
+                                      p_global_attribute17        => pi_check_line_rec.global_attribute17,
+                                      p_global_attribute18        => pi_check_line_rec.global_attribute18,
+                                      p_global_attribute19        => pi_check_line_rec.global_attribute19,
+                                      p_global_attribute20        => pi_check_line_rec.global_attribute20,
+                                      p_global_attribute_category => pi_check_line_rec.global_attribute_category,
+                                      p_calling_sequence          => pi_check_line_rec.calling_sequence,
+                                      p_accounting_event_id       => pi_accounting_event_id,
+                                      p_org_id                    => pi_check_line_rec.org_id);
+    po_invoice_payment_id := pi_check_line_rec.invoice_payment_id;
+  
+  EXCEPTION
+    WHEN OTHERS THEN
+      ROLLBACK;
+      po_return_status  := 'E';
+      po_return_message := SQLERRM;
+  END;
+  
+  
+  
+
+  PROCEDURE  create_ap_check(
+                              p_BANK_ID_T           IN    NUMBER,
+                              p_amount              IN    NUMBER,
+                            --  p_bank_account_name     IN    VARCHAR2,
+                              p_transfer_date       IN    DATE,
+                            --  p_currency_code       IN    VARCHAR2,
+                              p_vendor_site_id      IN    NUMBER,
+                              p_invoice_id          IN    NUMBER,
+															p_msg                 out   varchar,
+														  p_status              out   varchar,
+                              p_payment_num         out   number
+ )
+  IS
+  
+    
+     l_check_header_rec     r_check_header_rec;
+     l_check_line_rec       r_check_line_rec;
+     l_bank_acct_use_id_t   number;
+     l_check_id             number;
+    -- l_check_number       number;
+    -- l_bank_account_num   l_check_header_rec.bank_account_num%type; 
+     l_po_check_id               NUMBER    ;
+     l_po_check_num              VARCHAR2(40)  ;
+     l_po_accounting_event_id    NUMBER    ;
+     l_po_return_status          VARCHAR2(40)  ;
+     l_po_return_message         VARCHAR2(100)  ;
+     x_return_message            VARCHAR2(60)  ;
+     x_return_status             VARCHAR2(40);
+     v_invoice_id                NUMBER;
+  --   v_line_amount               number; --∏∂øÓº∆ªÆ £”‡Ω∂Ó
+     x_invoice_payment_id        number;
+    
+      
+     
+     
+     BEGIN   
+   
+   
+     p_status  := 'S';
+     
+                   
+     select ap_checks_s.nextval into l_check_id from dual;
+     
+     --≤È’“bank_use_id
+    -- begin
+				
+				  begin
+            select bank_acct_use_id into l_bank_acct_use_id_t 
+                   from ce_bank_acct_uses_all  
+                   where bank_account_id = p_BANK_ID_T ;
+						exception
+						   	 when others then
+             p_msg   := '’“≤ªµΩ“¯––use_id';
+             p_status  := 'E';
+            raise g_exception;
+        end;			
+                   
+   
+      --π©”¶…Ã–≈œ¢
+     
+         
+        begin
+          select sps.org_id, sps.vendor_site_code, sp.vendor_name
+            into l_check_header_rec.org_id,
+                 l_check_header_rec.vendor_site_code,
+                 l_check_header_rec.vendor_name
+            from ap_supplier_sites_all sps, ap_suppliers sp
+           where sps.vendor_site_id = p_vendor_site_id
+             and sp.vendor_id = sps.vendor_id;
+        exception
+          when others then
+            	p_msg   := 'π©”¶…Ãµÿµ„≤ª¥Ê‘⁄';
+													p_status  := 'E';
+            raise g_exception;
+        end;
+  
+      begin
+          --ªÒ»°∏∂øÓ“¯–––≈œ¢
+          select ba.bank_account_name,
+                 ba.bank_account_num,
+                 ba.currency_code bank_currency_code,
+                 cbau.bank_acct_use_id
+            into l_check_header_rec.bank_account_name,
+                 l_check_header_rec.bank_account_num,
+                 l_check_header_rec.currency_code,
+                 l_check_header_rec.ce_bank_acct_use_id
+            from ce_bank_accounts      ba,
+                 ce_bank_branches_v    cbb,
+                 ce_bank_acct_uses_all cbau
+           where cbau.bank_account_id = ba.bank_account_id
+             and sysdate between trunc(cbb.start_date) and
+                 nvl(trunc(cbb.end_date), sysdate + 1)
+             and cbb.branch_party_id = ba.bank_branch_id
+             and sysdate < nvl(ba.end_date, sysdate + 1)
+             and cbau.org_id = l_check_header_rec.org_id
+             and ba.bank_account_id = p_BANK_ID_T;
+        exception
+          when others then
+            p_msg := '“¯––’Àªß–≈œ¢≤ª¥Ê‘⁄';
+												p_status  := 'E';
+            raise g_exception;
+        end;
+      
+        
+        
+        
+   --≤È—Øbank_number  
+  -- select bank_account_num into l_bank_account_num from ce_bank_accounts where bank_account_id = p_BANK_ID_T;
+   
+   
+    --∏∂øÓµ•∫≈ID
+        begin
+          select cpd.payment_document_id
+            into l_check_header_rec.payment_document_id
+            from ce_payment_documents cpd
+           where cpd.internal_bank_account_id = p_BANK_ID_T;
+        exception
+          when others then
+            p_msg := '∏∂øÓµ•∫≈ID–≈œ¢≤ª¥Ê‘⁄';
+												p_status  := 'E';
+            raise g_exception;
+        end;
+    
+    --∏∂øÓµ•∫≈  
+      begin
+          select last_issued_document_number + 1
+            into l_check_header_rec.check_number
+            from ce_payment_documents acs
+           where acs.payment_document_id = l_check_header_rec.payment_document_id
+             and nvl(acs.inactive_date, sysdate) >= sysdate;
+        exception
+          when others then
+            p_msg := '∏∂øÓµ•∫≈–≈œ¢≤ª¥Ê‘⁄';
+												p_status  := 'E';
+            raise g_exception;
+        end;
+   
+   
+   --π©”¶…Ãµÿµ„–≈œ¢
+        begin
+          select sp.vendor_id,
+                 sps.vendor_site_id,
+                 nvl(sps.address_line1, 'Œﬁ'),
+                 sps.country,
+                 sps.zip,
+                 sps.state,
+                 sp.party_id,
+                 sps.party_site_id,
+                 sps.city,
+                 sps.province
+            into l_check_header_rec.vendor_id,
+                 l_check_header_rec.vendor_site_id,
+                 l_check_header_rec.address_line1,
+                 l_check_header_rec.country,
+                 l_check_header_rec.zip,
+                 l_check_header_rec.state,
+                 l_check_header_rec.party_id,
+                 l_check_header_rec.party_site_id,
+                 l_check_header_rec.city,
+                 l_check_header_rec.province
+            from po_vendors sp, po_vendor_sites_all sps
+           where sp.vendor_id = sps.vendor_id
+             and sps.vendor_site_id = p_vendor_site_id;
+        exception
+          when others then
+            p_msg := 'π©”¶…Ãµÿµ„–≈œ¢≤ª¥Ê‘⁄';
+												p_status  := 'E';
+            raise g_exception;
+        end;
+    
+   
+    --≤È—Ø∑®»À µÃÂid
+    
+        begin
+          select org_information2
+            into l_check_header_rec.legal_entity_id
+            from hr_organization_information
+           where organization_id = l_check_header_rec.org_id
+             and org_information_context = 'Operating Unit Information';
+        exception
+          when others then
+										  p_msg := 'Œﬁ∑®≤È’“∑®»À µÃÂ';
+            	p_status  := 'E';
+												
+            raise g_exception;
+        end;
+     
+			
+   
+   
+ -- ≤Â»Î∏∂øÓ±ÌÕ∑ 
+     
+      l_check_header_rec.amount                              :=  p_amount;
+      l_check_header_rec.ce_bank_acct_use_id                 :=  l_bank_acct_use_id_t; -- bank_account_id or bank_acct_use_id
+    --  l_check_header_rec.bank_account_name                   :=  p_bank_account_name;
+      l_check_header_rec.check_date                          :=  p_transfer_date;
+      l_check_header_rec.check_id                            :=  l_check_id;
+    --  l_check_header_rec.check_number                        :=  l_check_number;
+    --  l_check_header_rec.currency_code                       :=  p_currency_code;
+      l_check_header_rec.last_updated_by                     :=  fnd_global.user_id;
+      l_check_header_rec.last_update_date                    :=  SYSDATE;
+      l_check_header_rec.payment_type_flag                   :=  'M';
+    --  l_check_header_rec.address_line1                       :=  
+      l_check_header_rec.address_line2                       :=  NULL;
+      l_check_header_rec.address_line3                       :=  NULL;
+      l_check_header_rec.checkrun_name                       :=  NULL;
+      l_check_header_rec.check_format_id                     :=  NULL;--1000
+      l_check_header_rec.check_stock_id                      :=  NULL;
+    --  l_check_header_rec.city                                :=  
+    --  l_check_header_rec.country                             :=  
+      l_check_header_rec.created_by                          :=  fnd_global.user_id;
+      l_check_header_rec.creation_date                       :=  SYSDATE;
+      l_check_header_rec.last_update_login                   :=  fnd_global.login_id;
+      l_check_header_rec.status_lookup_code                  :=  'NEGOTIABLE';
+    --  l_check_header_rec.vendor_name                         :=  
+    --  l_check_header_rec.vendor_site_code                    :=  
+      l_check_header_rec.external_bank_account_id            :=  null;
+    --  l_check_header_rec.zip                                 :=  
+    --  l_check_header_rec.bank_account_num                    :=  l_bank_account_num;
+      l_check_header_rec.bank_account_type                   :=  null;
+      l_check_header_rec.bank_num                            :=  null;
+      l_check_header_rec.check_voucher_num                   :=  null; 
+      l_check_header_rec.cleared_amount                      :=  null;
+      l_check_header_rec.cleared_date                        :=  null;
+      l_check_header_rec.doc_category_code                   :=  null;
+      l_check_header_rec.doc_sequence_id                     :=  null;
+      l_check_header_rec.doc_sequence_value                  :=  null;
+    --  l_check_header_rec.province                            :=  
+      l_check_header_rec.released_date                       :=  null;
+      l_check_header_rec.released_by                         :=  null;
+    --  l_check_header_rec.state                               :=  
+      l_check_header_rec.stopped_date                        :=  null;
+      l_check_header_rec.stopped_by                          :=  null;
+      l_check_header_rec.void_date                           :=  null;
+      l_check_header_rec.attribute1                          :=  null;
+      l_check_header_rec.attribute10                         :=  null;
+      l_check_header_rec.attribute11                         :=  null;
+      l_check_header_rec.attribute12                         :=  null;
+      l_check_header_rec.attribute13                         :=  null;
+      l_check_header_rec.attribute14                         :=  null;
+      l_check_header_rec.attribute15                         :=  null;
+      l_check_header_rec.attribute2                          :=  null;
+      l_check_header_rec.attribute3                          :=  null;
+      l_check_header_rec.attribute4                          :=  null;
+      l_check_header_rec.attribute5                          :=  null;
+      l_check_header_rec.attribute6                          :=  null;
+      l_check_header_rec.attribute7                          :=  null;
+      l_check_header_rec.attribute8                          :=  null;
+      l_check_header_rec.attribute9                          :=  null;
+      l_check_header_rec.attribute_category                  :=  null;
+      l_check_header_rec.future_pay_due_date                 :=  null;
+      l_check_header_rec.treasury_pay_date                   :=  null;
+      l_check_header_rec.treasury_pay_number                 :=  null;
+      l_check_header_rec.withholding_status_lkup_code        :=  null;
+      l_check_header_rec.reconciliation_batch_id             :=  null;
+      l_check_header_rec.cleared_base_amount                 :=  null;
+      l_check_header_rec.cleared_exchange_rate               :=  null;
+      l_check_header_rec.cleared_exchange_date               :=  null;
+      l_check_header_rec.cleared_exchange_rate_type          :=  null;
+      l_check_header_rec.address_line4                       :=  null;
+      l_check_header_rec.county                              :=  null;
+      l_check_header_rec.address_style                       :=  null;
+    --  l_check_header_rec.org_id                              :=  
+    --  l_check_header_rec.vendor_id                           :=  
+    --  l_check_header_rec.vendor_site_id                      :=  
+      l_check_header_rec.exchange_rate                       :=  null;
+      l_check_header_rec.exchange_date                       :=  null;
+      l_check_header_rec.exchange_rate_type                  :=  null;
+      l_check_header_rec.base_amount                         :=  null;
+      l_check_header_rec.checkrun_id                         :=  null;
+      l_check_header_rec.global_attribute_category           :=  null;
+      l_check_header_rec.global_attribute1                   :=  null;
+      l_check_header_rec.global_attribute2                   :=  null;
+      l_check_header_rec.global_attribute3                   :=  null;
+      l_check_header_rec.global_attribute4                   :=  null;
+      l_check_header_rec.global_attribute5                   :=  null;
+      l_check_header_rec.global_attribute6                   :=  null;
+      l_check_header_rec.global_attribute7                   :=  null;
+      l_check_header_rec.global_attribute8                   :=  null;
+      l_check_header_rec.global_attribute9                   :=  null;
+      l_check_header_rec.global_attribute10                  :=  null;
+      l_check_header_rec.global_attribute11                  :=  null;
+      l_check_header_rec.global_attribute12                  :=  null;
+      l_check_header_rec.global_attribute13                  :=  null;
+      l_check_header_rec.global_attribute14                  :=  null;
+      l_check_header_rec.global_attribute15                  :=  null;
+      l_check_header_rec.global_attribute16                  :=  null;
+      l_check_header_rec.global_attribute17                  :=  null;
+      l_check_header_rec.global_attribute18                  :=  null;
+      l_check_header_rec.global_attribute19                  :=  null;
+      l_check_header_rec.global_attribute20                  :=  null;
+      l_check_header_rec.transfer_priority                   :=  null;
+      l_check_header_rec.maturity_exchange_rate_type         :=  null;
+      l_check_header_rec.maturity_exchange_date              :=  null;
+      l_check_header_rec.maturity_exchange_rate              :=  null;
+      l_check_header_rec.description                         :=  null;
+      l_check_header_rec.anticipated_value_date              :=  null;
+      l_check_header_rec.actual_value_date                   :=  null;
+      l_check_header_rec.payment_method_code                 :=  'CHECK';
+      l_check_header_rec.payment_profile_id                  :=  181;
+      l_check_header_rec.bank_charge_bearer                  :=  null;
+      l_check_header_rec.settlement_priority                 :=  null;
+    --  l_check_header_rec.payment_document_id                 :=  
+    --  l_check_header_rec.party_id                            :=  
+    --  l_check_header_rec.party_site_id                       :=  
+     -- l_check_header_rec.legal_entity_id                     :=  
+     -- l_check_header_rec.payment_id                          :=  
+      l_check_header_rec.calling_sequence                    :=   'PLSQL';
+      l_check_header_rec.remit_to_supplier_name              :=   null;
+      l_check_header_rec.remit_to_supplier_id                :=   null;
+      l_check_header_rec.remit_to_supplier_site              :=   null;
+      l_check_header_rec.remit_to_supplier_site_id           :=   null;
+      l_check_header_rec.relationship_id                     :=   null;
+      l_check_header_rec.paycard_authorization_number        :=   null;
+      l_check_header_rec.paycard_reference_id                :=   null;
+      
+      
+      create_check_header(pi_check_header_rec           =>  l_check_header_rec,
+                                po_check_id             =>  l_po_check_id             , -- ‰≥ˆ£∫∏∂øÓid
+                                po_check_num            =>  l_po_check_num             , -- ‰≥ˆ£∫∏∂øÓ±‡∫≈
+                                po_accounting_event_id  =>  l_po_accounting_event_id  , -- ‰≥ˆ£∫º«’Àid
+                                po_return_status        =>  l_po_return_status         ,
+                                po_return_message       =>  l_po_return_message        ) ;
+    
+      
+     
+  --≤Â»Î∏∂øÓ±Ì––    
+                
+    if l_po_return_status = 'S' then
+				    
+				      
+			 
+				  
+          p_msg := '¥¥Ω®∏∂øÓÕ∑≥…π¶£¨ø™ º¥¥Ω®∏∂øÓ––';
+										
+          select ap_invoice_payments_s.nextval
+            into l_check_line_rec.invoice_payment_id
+            from dual;
+        
+          begin
+            select t.invoice_id,
+                   t.set_of_books_id,
+                   t.org_id,
+                   t.invoice_currency_code,
+                   t.exchange_rate * l_check_header_rec.amount
+              into v_invoice_id,
+                   l_check_line_rec.set_of_books_id,
+                   l_check_line_rec.org_id,
+                   l_check_line_rec.base_currency_code,
+                   l_check_line_rec.invoice_base_amount
+              from ap_invoices_all t
+             where t.invoice_id = p_invoice_id;
+          exception
+            when others then
+              p_msg := '∑¢∆±–≈œ¢≤ª’˝»∑';
+              p_status  := 'E';
+              raise g_exception;
+            
+          end;
+      
+      --≤È—Ø∏∂øÓ±‡∫≈
+         begin
+            select   aps.payment_num
+                 --   ,aps.amount_remaining 
+              into   l_check_line_rec.payment_num 
+                  
+              from   ap_payment_schedules_all aps
+              where  aps.invoice_id = p_invoice_id;
+                   --  and aps.amount_remaining > 0;
+										exception
+										   when others then
+              p_msg := 'Œﬁ∑®≤È—Ø∏∂øÓ±‡∫≈';
+              p_status  := 'E';
+              raise g_exception;
+          end;
+       
+    --≤È—Ø∆⁄º‰√˚≥∆ 
+        begin
+            select gps.period_name
+            into l_check_line_rec.period_name
+            from gl_period_statuses gps
+            where gps.closing_status = 'O'
+              and p_transfer_date between gps.start_date and gps.end_date
+              and gps.application_id = 200
+              and gps.set_of_books_id =l_check_line_rec.set_of_books_id ;--pi_set_of_books_id
+        exception
+            when others then
+            p_msg := '∏∂øÓ»’∆⁄≤ª‘⁄¥Úø™µƒª·º∆∆⁄º‰ƒ⁄';
+												 p_status  := 'E';
+            raise g_exception;
+         end;
+       
+       
+          p_msg := 'ø™ º≤Â»Î∏∂øÓ––' ;
+       --   l_check_line_rec.payment_num               := l.line_num;
+          l_check_line_rec.old_invoice_payment_id    := NULL;
+       --   l_check_line_rec.period_name               := v_period_name;
+          l_check_line_rec.invoice_type              := null;
+          l_check_line_rec.accounting_date           := l_check_header_rec.check_date;
+          l_check_line_rec.discount_taken            := 0;
+          l_check_line_rec.discount_lost             := NULL;
+          l_check_line_rec.payment_base_amount       := l_check_header_rec.exchange_rate *
+                                                                       l_check_header_rec.amount;
+          l_check_line_rec.accrual_posted_flag       := 'N';
+          l_check_line_rec.cash_posted_flag          := 'N';
+          l_check_line_rec.posted_flag               := 'N';
+          l_check_line_rec.last_updated_by           := fnd_global.user_id;
+          l_check_line_rec.last_update_login         := fnd_global.login_id;
+          l_check_line_rec.currency_code             := l_check_header_rec.currency_code;
+          l_check_line_rec.exchange_rate             := l_check_header_rec.exchange_rate;
+          l_check_line_rec.exchange_rate_type        := l_check_header_rec.exchange_rate_type;
+          l_check_line_rec.exchange_date             := l_check_header_rec.exchange_date;
+          l_check_line_rec.ce_bank_acct_use_id       := l_check_header_rec.ce_bank_acct_use_id;
+          l_check_line_rec.bank_account_num          := l_check_header_rec.bank_account_num;
+          l_check_line_rec.bank_account_type         := l_check_header_rec.bank_account_type;
+          l_check_line_rec.bank_num                  := l_check_header_rec.bank_num;
+          l_check_line_rec.future_pay_posted_flag    := NULL;
+          l_check_line_rec.exclusive_payment_flag    := NULL;
+          l_check_line_rec.accts_pay_ccid            := NULL;
+          l_check_line_rec.gain_ccid                 := NULL;
+          l_check_line_rec.loss_ccid                 := NULL;
+          l_check_line_rec.future_pay_ccid           := NULL;
+          l_check_line_rec.asset_ccid                := NULL;
+          l_check_line_rec.payment_dists_flag        := NULL;
+          l_check_line_rec.payment_mode              := 'PAY';
+          l_check_line_rec.replace_flag              := 'N';
+          l_check_line_rec.attribute1                := NULL;
+          l_check_line_rec.attribute2                := NULL;
+          l_check_line_rec.attribute3                := NULL;
+          l_check_line_rec.attribute4                := NULL;
+          l_check_line_rec.attribute5                := NULL;
+          l_check_line_rec.attribute6                := NULL;
+          l_check_line_rec.attribute7                := NULL;
+          l_check_line_rec.attribute8                := NULL;
+          l_check_line_rec.attribute9                := NULL;
+          l_check_line_rec.attribute10               := NULL;
+          l_check_line_rec.attribute11               := NULL;
+          l_check_line_rec.attribute12               := NULL;
+          l_check_line_rec.attribute13               := NULL;
+          l_check_line_rec.attribute14               := NULL;
+          l_check_line_rec.attribute15               := NULL;
+          l_check_line_rec.attribute_category        := NULL;
+          l_check_line_rec.global_attribute1         := NULL;
+          l_check_line_rec.global_attribute2         := NULL;
+          l_check_line_rec.global_attribute3         := NULL;
+          l_check_line_rec.global_attribute4         := NULL;
+          l_check_line_rec.global_attribute5         := NULL;
+          l_check_line_rec.global_attribute6         := NULL;
+          l_check_line_rec.global_attribute7         := NULL;
+          l_check_line_rec.global_attribute8         := NULL;
+          l_check_line_rec.global_attribute9         := NULL;
+          l_check_line_rec.global_attribute10        := NULL;
+          l_check_line_rec.global_attribute11        := NULL;
+          l_check_line_rec.global_attribute12        := NULL;
+          l_check_line_rec.global_attribute13        := NULL;
+          l_check_line_rec.global_attribute14        := NULL;
+          l_check_line_rec.global_attribute15        := NULL;
+          l_check_line_rec.global_attribute16        := NULL;
+          l_check_line_rec.global_attribute17        := NULL;
+          l_check_line_rec.global_attribute18        := NULL;
+          l_check_line_rec.global_attribute19        := NULL;
+          l_check_line_rec.global_attribute20        := NULL;
+          l_check_line_rec.global_attribute_category := NULL;
+          l_check_line_rec.calling_sequence          := 'PLSQL';
+     
+     
+        
+          if l_po_return_status = 'S'    then
+										  
+              p_msg :='µ˜”√––api' ;
+                  fnd_client_info.set_org_context(l_check_header_rec.ORG_ID);
+                  --∏∂øÓ–––≈œ¢≤Â»Î
+                create_check_line(   pi_check_line_rec      => l_check_line_rec,
+                                     pi_check_id            => l_po_check_id,
+                                     pi_accounting_event_id => l_po_accounting_event_id,
+                                     pi_invoice_id          => v_invoice_id,
+                                     pi_amount              =>  p_amount,
+                                     po_invoice_payment_id  => x_invoice_payment_id, --∏∂øÓ––ID
+                                     po_return_status       => x_return_status,
+                                     po_return_message      => x_return_message);
+																																					
+																 p_msg := '∏∂øÓ––≤Â»ÎΩ·π˚  ' || 	x_return_status || '∏∂øÓ––≤Â»Î–≈œ¢   ' || x_return_message  ;		
+														
+                   	if  	x_return_status = 'S' then 
+                          p_payment_num  := l_check_header_rec.check_number;
+                          p_msg    := '∑¢∆±∏∂øÓ≥…π¶';
+                          p_status := 'S';
+                          commit;	
+                    else 
+                          p_msg    := '∑¢∆±∏∂øÓ≤ª≥…π¶';
+                          p_status := 'E';
+                          raise g_exception;
+                     end if; 
+                          
+                          
+																					
+                
+                  --x_amount := l.payment_amount + nvl(x_amount,0);
+          end if;
+       else
+							    p_msg  := '∏∂øÓÕ∑≤Â»ÎŒ¥≥…π¶';
+                  p_status   :=	l_po_return_status;
+											rollback;
+							END IF;
+							
+				exception
+				   when others then
+							  rollback;
+							   return;	
+							 
+							
+  END;
+      
+      
+      
+      
+    PROCEDURE create_cash (
+                           p_CUSTOMER_ID                   IN NUMBER,
+                           p_BANK_ACCOUNT_NAME            IN VARCHAR2,
+                           p_INVOICE_CURRENCY_CODE        IN VARCHAR2, --Ωª“◊±“÷÷
+                           p_INVOICE_AMOUNT               IN NUMBER,
+                           p_ENTRY_DATE                   IN DATE,
+                           p_org_id                       IN NUMBER,
+                           p_CASH_ITEMS_ENTRY             IN VARCHAR2,
+                           p_dist_code_combination_id_e   in number,
+                           x_msg                          OUT  varchar,
+                           x_status                       OUT  VARCHAR2,
+                           x_cash_receipt_number          OUT  varchar2
+                                   ) 
+              IS
+              l_return_status        VARCHAR(10);  
+              l_msg_count            NUMBER;  
+              l_msg_data             VARCHAR(150);  
+              l_cash_receipt_id      NUMBER;  
+              --p_count number := 0;  
+              l_customer_number      varchar2(30);
+              l_receipt_method_id    number;
+              l_receipt_number       varchar2(40);
+      
+              BEGIN
+                
+                
+           
+                                          
+               
+               
+                   BEGIN
+                        SELECT  customer_number into l_customer_number --≤È—ØøÕªß±‡∫≈
+                            FROM ar_customers
+                           WHERE customer_id  = p_customer_id;  
+                   EXCEPTION
+                         when NO_DATA_FOUND then
+                              x_status   := 'E';  
+                              x_msg       := '’“≤ªµΩøÕªß±‡¬Î';
+                              return;
+                   END;
+                   
+                         
+                   BEGIN 
+                         select receipt_method_id into l_receipt_method_id  --≤È—Ø ’øÓ∑Ω∑®
+                            from ar_receipt_methods
+                         where name= p_BANK_ACCOUNT_NAME ;
+                  EXCEPTION
+                         when NO_DATA_FOUND then
+                              x_status   := 'E';  
+                              x_msg       := '∏√◊™»Î’Àªß≤ª¥Ê‘⁄”⁄ ’øÓ∑Ω∑®÷–';
+                              return;
+                  END;
+                         
+              begin    
+                  bhsc_wssb_util.manual_doc_num( p_org_id ,'ARRECEIPT',p_INVOICE_CURRENCY_CODE,l_receipt_number);--…˙≥… ’øÓ±‡∫≈
+               exception
+                  when others then
+                   x_msg    := '…˙≥…”¶ ’±‡∫≈ ß∞‹';
+                   x_status := 'E';
+                   raise g_exception;
+                      
+              end;     
+                     
+              
+               GL_GLOBAL.set_aff_validation(context_type => 'OU',
+                                               context_id => p_org_id);
+                mo_global.set_policy_context('S', p_org_id);
+                /*APPS.FND_GLOBAL.APPS_INITIALIZE(user_id => 1110,
+                                            resp_id => 50767,
+                                         	RESP_APPL_ID => 222);*/
+                                  
+                 AR_RECEIPT_API_PUB.CREATE_CASH (
+                                                p_api_version       =>      1.0,  
+                                                p_init_msg_list    => FND_API.G_FALSE,
+                                                p_commit           => FND_API.G_FALSE,
+                                                p_validation_level => FND_API.G_VALID_LEVEL_NONE,   
+                                                x_return_status       =>      l_return_status,    
+                                                x_msg_count         =>      l_msg_count,    
+                                                x_msg_data          =>      l_msg_data,   
+                                                p_currency_code       =>    p_INVOICE_CURRENCY_CODE,    
+                                                p_amount          =>      p_INVOICE_AMOUNT,   
+                                                p_receipt_number      =>     l_receipt_number,   
+                                                p_receipt_date        =>    p_ENTRY_DATE,   
+                                                p_gl_date         =>       sysdate,    
+                                               -- p_remittance_bank_account_name => p_BANK_ACCOUNT_NAME,
+                                                p_customer_number     =>      l_customer_number,    
+                                                p_receipt_method_id     =>      l_receipt_method_id,    
+                                                p_cr_id                      =>      l_cash_receipt_id, 
+                                                p_org_id               => p_org_id           	
+                                                );
+                      
+                      
+                       
+                       x_status              :=  l_return_status ;  --∑µªÿ”¶ ’◊¥Ã¨–≈œ¢
+                       x_cash_receipt_number     :=  l_receipt_number;
+                    
+                      if l_msg_count = 1 then
+                           x_msg :='œµÕ≥–≈œ¢'||' '|| l_msg_data;
+                        commit;
+                       elsif l_msg_count > 1
+                          then 
+                            declare
+                               l_mesg varchar(150);
+                               
+                             begin
+                                x_msg :='∂‡÷ÿ¥ÌŒÛ';
+                              for i in 1 ..l_msg_count 
+                              loop
+                                  l_mesg := fnd_msg_pub.get(fnd_msg_pub.g_next,fnd_api.g_false);
+                                   x_msg  := x_msg || l_mesg ;
+                              end loop;
+                                
+                           
+                            end; 
+                       end if;
+                      
+                  --    dbms_output.put_line('Status ' || l_return_status);  
+                   --   dbms_output.put_line('Cash Receipt id ' || l_cash_receipt_id );  
+                  --    dbms_output.put_line('Message count ' || l_msg_count);   
+                  
+                  
+                  
+                   declare 
+                     l_combination_seg4   varchar(30);  --Õ˘¿¥’Àªßπ´Àæº‰∂Œ
+                    begin
+                     	     select segment4 into  l_combination_seg4 
+                           from gl_code_combinations_kfv 
+                           where code_combination_id = p_dist_code_combination_id_e;
+    
+          --∏¸–¬”¶ ’µØ–‘”Ú◊÷∂Œ      
+                     if l_cash_receipt_id is not null then
+                              update AR_CASH_RECEIPTS_all 
+                               set  attribute1 =  p_CASH_ITEMS_ENTRY,
+                                    attribute2 =  l_combination_seg4,
+                                    attribute10   =   'cash_transfer'  
+                                    where cash_receipt_id =  l_cash_receipt_id;
+                     end if;   
+                 exception
+                     when others then
+                        x_status := 'E';
+                        x_msg    := '∏¸–¬”¶ ’∆±æ› ß∞‹';
+                        raise g_exception;
+                       
+                  end;
+                     
+           
+          END create_cash;  
+                 
+      procedure update_je_flex (  x_bank_cash_ccid_t            in number,
+                                  x_dist_code_combination_id_t  in number,
+                                  x_CASH_ITEMS_ENTRY            in varchar,
+                                  x_je_batch_id                 in number
+      ) 
+      is
+      
+      l_parent_acct       varchar(30);
+      l_hier_lev        number;
+      l_segment3        varchar(30);
+     
+      l_je_header_id      number;
+      l_JE_LINE_NUM       number;
+      l_combination_seg4    varchar(30);
+      l_temp        varchar(30);
+     
+         CURSOR c_code is 
+            select descriptive_flex_context_code from
+                  FND_DESCR_FLEX_CONTEXTS_VL where
+                     descriptive_flexfield_name = 'GL_CAPTURED_INFO'
+                           and enabled_flag = 'Y' ;
+         
+        
+      begin
+        
+        select segment3 into l_segment3  
+            from  gl_code_combinations_kfv 
+              where code_combination_id = x_bank_cash_ccid_t; --ªÒ»°œ÷Ω’Àªßµƒ“¯–––≈œ¢
+              
+        
+        
+          
+      
+          select je_header_id  into l_je_header_id                --ªÒ»°»’º«’ÀÕ∑id
+                        from gl_je_headers  where je_batch_id  = x_je_batch_id;  
+                        
+        select  JE_LINE_NUM into l_JE_LINE_NUM        --ªÒ»°»’º«’À––id
+            from GL_JE_LINES 
+              where je_header_id = l_je_header_id 
+              and  code_combination_id = x_bank_cash_ccid_t;
+                  
+                  select segment4 into  l_combination_seg4                --ªÒ»°π´Àæº‰–≈œ¢
+                        from gl_code_combinations_kfv 
+                  where code_combination_id = x_dist_code_combination_id_t;
+                  
+                
+                  
+                  for i in 0..2 loop
+    
+                      select substr(l_segment3,1, 
+                          length(l_segment3)-(i)*2) into l_temp from  dual;
+                              
+                       FOR n IN c_code LOOP 
+                             if l_temp  =  n.descriptive_flex_context_code then
+                                      l_parent_acct := l_temp;
+                                 end if;
+                         END LOOP; 
+                           
+                        if l_parent_acct is not null
+                            then exit;
+                        end if; 
+                  end loop;
+               
+                  update GL_JE_LINES 
+                      set     attribute11 = 'Y',
+                          attribute12 = x_CASH_ITEMS_ENTRY£¨
+                          attribute13 = l_combination_seg4£¨
+                          attribute20 = l_parent_acct ,
+                          context3    = l_parent_acct
+                          
+                      WHERE  JE_HEADER_ID = l_je_header_id
+                          AND JE_LINE_NUM = l_JE_LINE_NUM;
+              
+        
+       exception
+          when others then 
+            raise g_exception;
+      
+    end update_je_flex;            
+      
+        
+      
+      
+      
+      
+    PROCEDURE CREATE_GL  (
+    
+                p_TRANSFER_DATE               IN      DATE,
+                p_ENTRY_DATE                  IN      DATE,
+               
+                p_CURRENCY_CODE_TRANSFER      IN      VARCHAR2,
+               
+                p_SET_OF_BOOKS_ID_TRANSFER    IN      NUMBER,
+                p_SET_OF_BOOKS_ID_ENTRY       IN      NUMBER,
+                P_CODE_COMBINATION_ID_T       IN      NUMBER,
+                P_CODE_COMBINATION_ID_E       IN      NUMBER,
+                p_AMOUNT_T                    IN      NUMBER,
+                p_cash_items_entry            in      varchar,
+                p_cash_items_transfer         in      varchar,
+                
+                p_BANK_ID_T                   IN      NUMBER,
+                p_BANK_ID_E                   IN      NUMBER,
+								p_status                      OUT     VARCHAR,
+								p_msg                         OUT     VARCHAR,
+                p_doc_sequence_value_e        out     number,
+                p_doc_sequence_value_t        out     number
+               
+                  
+    )
+      IS
+      
+        l_period_name_t     varchar2(30);      --◊™≥ˆπ´Àæ∆⁄º‰√˚≥∆
+        l_period_name_e     varchar2(30);   --◊™»Îπ´Àæ∆⁄º‰√˚≥∆
+        --l_group_id      number;
+        l_bank_cash_ccid_t    number;
+        l_bank_cash_ccid_e    number;
+        bank_acct_use_id_t    number;
+        bank_acct_use_id_e    number;
+    --    l_req_id              number;
+        l_import_sec_t        NUMBER; 
+        l_import_sec_e        NUMBER;
+        l_req_id_e            number;
+        l_req_id_t            number;
+        l_wait_req_e         BOOLEAN;
+        l_wait_req_t         BOOLEAN;
+        l_child_phase        VARCHAR2(100);  
+        l_child_status      VARCHAR2(100);  
+        l_dev_phase         VARCHAR2(100);  
+        l_dev_status        VARCHAR2(100);  
+        l_message           VARCHAR2(100);  
+         
+         
+        
+        
+       
+        BEGIN
+								  
+					 p_status := 'S';
+          
+           --∏˘æ›◊™’À»’∆⁄≈–∂œ∆⁄º‰√˚≥∆
+           
+            begin
+                select gps.period_name
+                into  l_period_name_t 
+                from gl_period_statuses gps
+                where gps.closing_status = 'O'
+                       and p_TRANSFER_DATE between gps.start_date and gps.end_date
+                       and gps.application_id = 101
+                       and gps.set_of_books_id =p_SET_OF_BOOKS_ID_TRANSFER ;--pi_set_of_books_id
+            exception
+                when others then
+                p_msg := 'º«’À»’∆⁄≤ª‘⁄¥Úø™µƒª·º∆∆⁄º‰ƒ⁄';
+                p_status  := 'E';
+                raise g_exception;
+             end;
+             
+             
+              begin
+                select gps.period_name
+                into  l_period_name_e 
+                from gl_period_statuses gps
+                where gps.closing_status = 'O'
+                       and p_ENTRY_DATE between gps.start_date and gps.end_date
+                       and gps.application_id = 101
+                       and gps.set_of_books_id =p_SET_OF_BOOKS_ID_ENTRY ;--pi_set_of_books_id
+            exception
+                when others then
+                p_msg := 'º«’À»’∆⁄≤ª‘⁄¥Úø™µƒª·º∆∆⁄º‰ƒ⁄';
+                p_status  := 'E';
+                raise g_exception;
+             end;
+         
+        
+        
+        
+          
+       begin  -- ≤È—Øbank_use_id
+           select bank_acct_use_id into bank_acct_use_id_t 
+                   from ce_bank_acct_uses_all  
+                   where bank_account_id = p_BANK_ID_T ;
+                   
+            select bank_acct_use_id into bank_acct_use_id_e  
+                    from ce_bank_acct_uses_all 
+                     where bank_account_id = p_BANK_ID_E ; 
+       exception
+							    when others then
+											    p_msg    := 'Œﬁ∑®’“µΩ∂‘”¶“¯––’Àªß';
+															p_status := 'E';
+															RAISE  g_exception;
+							 END;
+							    
+							
+							
+							
+       
+							
+							
+							 begin  --≤È—Øπ´Àæ◊™’À’Àªß∂‘”¶µƒœ÷Ωø∆ƒø  
+            select cash_ccid into l_bank_cash_ccid_t
+              from AR_RECEIPT_METHOD_ACCOUNTS_ALL
+                WHERE REMIT_BANK_ACCT_USE_ID = bank_acct_use_id_t;
+            
+            
+            select cash_ccid into l_bank_cash_ccid_e
+              from AR_RECEIPT_METHOD_ACCOUNTS_ALL
+                WHERE REMIT_BANK_ACCT_USE_ID =bank_acct_use_id_e ;
+									exception
+									      when others then
+               p_msg    := 'œ÷Ωø∆ƒø';
+               p_status := 'E';
+               RAISE  g_exception;
+        END;
+									    
+          --≤Â≥ˆ◊™≥ˆπ´ÀæΩË∑ΩœÓ
+          INSERT INTO GL_INTERFACE
+                      (STATUS,
+                      LEDGER_ID,
+                      SET_OF_BOOKS_ID,
+                      ACCOUNTING_DATE,
+                      CURRENCY_CODE,
+                      DATE_CREATED,
+                      CREATED_BY,
+                      ACTUAL_FLAG,
+                      GROUP_ID,
+                      USER_JE_CATEGORY_NAME,
+                      USER_JE_SOURCE_NAME,
+                      CODE_COMBINATION_ID,
+                      ENTERED_DR,
+                      ENTERED_CR,
+                      ACCOUNTED_DR,
+                      ACCOUNTED_CR,
+                      PERIOD_NAME,
+                      REFERENCE1)
+                       VALUES 
+                      (
+                      'NEW',
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_TRANSFER_DATE,      
+                      p_CURRENCY_CODE_TRANSFER,
+                      SYSDATE,
+                      fnd_global.user_id,
+                      'A',
+                      20170009,
+                      '◊ Ωπ‹¿ÌœµÕ≥',
+                      '»Àπ§',
+                      P_CODE_COMBINATION_ID_T,
+                      p_AMOUNT_T,
+                      null,
+                      p_AMOUNT_T,
+                      null,
+                      l_period_name_t,
+                      '◊ Ωµ˜≤¶');
+                      
+                      
+                      
+            --≤Â≥ˆ◊™≥ˆπ´Àæ¥˚∑ΩœÓ
+              
+            INSERT INTO GL_INTERFACE
+                      (STATUS,
+                      LEDGER_ID,
+                      SET_OF_BOOKS_ID,
+                      ACCOUNTING_DATE,
+                      CURRENCY_CODE,
+                      DATE_CREATED,
+                      CREATED_BY,
+                      ACTUAL_FLAG,
+                      GROUP_ID,
+                      USER_JE_CATEGORY_NAME,
+                      USER_JE_SOURCE_NAME,
+                      CODE_COMBINATION_ID,
+                      ENTERED_DR,
+                      ENTERED_CR,
+                      ACCOUNTED_DR,
+                      ACCOUNTED_CR,
+                      PERIOD_NAME,
+                      REFERENCE1)
+                       VALUES 
+                      (
+                      'NEW',
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_TRANSFER_DATE,     
+                      p_CURRENCY_CODE_TRANSFER,
+                      SYSDATE,
+                      fnd_global.user_id,
+                      'A',
+                      20170009,
+                      '◊ Ωπ‹¿ÌœµÕ≥',
+                      '»Àπ§',
+                      l_bank_cash_ccid_t,
+                      null,
+                      p_AMOUNT_T,
+                      null,
+                      p_AMOUNT_T,
+                      l_period_name_t,
+                      '◊ Ωµ˜≤¶');
+                      
+                     
+                      
+                      
+            --≤Â»Î◊™»Îπ´ÀæΩË∑ΩœÓ
+            
+             INSERT INTO GL_INTERFACE
+                      (STATUS,
+                      LEDGER_ID,
+                      SET_OF_BOOKS_ID,
+                      ACCOUNTING_DATE,
+                      CURRENCY_CODE,
+                      DATE_CREATED,
+                      CREATED_BY,
+                      ACTUAL_FLAG,
+                      GROUP_ID,
+                      USER_JE_CATEGORY_NAME,
+                      USER_JE_SOURCE_NAME,
+                      CODE_COMBINATION_ID,
+                      ENTERED_DR,
+                      ENTERED_CR,
+                      ACCOUNTED_DR,
+                      ACCOUNTED_CR,
+                      PERIOD_NAME,
+                      REFERENCE1)
+                       VALUES 
+                      (
+                      'NEW',
+                      p_SET_OF_BOOKS_ID_ENTRY,
+                      p_SET_OF_BOOKS_ID_ENTRY,
+                      p_ENTRY_DATE,      
+                      p_CURRENCY_CODE_TRANSFER,
+                      SYSDATE,
+                      fnd_global.user_id,
+                      'A',
+                      20170009,
+                      '◊ Ωπ‹¿ÌœµÕ≥',
+                      '»Àπ§',
+                      l_bank_cash_ccid_e,
+                      p_AMOUNT_T,
+                      null,
+                      p_AMOUNT_T,
+                      null,
+                      l_period_name_e,
+                      '◊ Ωµ˜≤¶');  
+          
+          --≤Â»Î◊™»Îπ´Àæ¥˚∑ΩœÓ
+             
+           INSERT INTO GL_INTERFACE
+                      (STATUS,
+                      LEDGER_ID,
+                      SET_OF_BOOKS_ID,
+                      ACCOUNTING_DATE,
+                      CURRENCY_CODE,
+                      DATE_CREATED,
+                      CREATED_BY,
+                      ACTUAL_FLAG,
+                      GROUP_ID,
+                      USER_JE_CATEGORY_NAME,
+                      USER_JE_SOURCE_NAME,
+                      CODE_COMBINATION_ID,
+                      ENTERED_DR,
+                      ENTERED_CR,
+                      ACCOUNTED_DR,
+                      ACCOUNTED_CR,
+                      PERIOD_NAME,
+                      REFERENCE1)
+                       VALUES 
+                      (
+                      'NEW',
+                      p_SET_OF_BOOKS_ID_ENTRY,
+                      p_SET_OF_BOOKS_ID_ENTRY,
+                      p_ENTRY_DATE,     
+                      p_CURRENCY_CODE_TRANSFER,
+                      SYSDATE,
+                      fnd_global.user_id,
+                      'A',
+                      20170009,
+                      '◊ Ωπ‹¿ÌœµÕ≥',
+                      '»Àπ§',
+                      P_CODE_COMBINATION_ID_E,
+                      null,
+                      p_AMOUNT_T,
+                      null,
+                      p_AMOUNT_T,
+                      l_period_name_e,
+                      '◊ Ωµ˜≤¶'); 
+                      
+                      
+                     p_msg := '≥…π¶≤Â»ÎΩ”ø⁄±Ì';
+                     p_status  := 'S';
+               
+           
+           
+        ---------------Ã·Ωª◊™»Îπ´Àæ»’º«’À«Î«Û----------   
+        --ƒ£ƒ‚µ«¬Ω
+           
+             APPS.FND_GLOBAL.APPS_INITIALIZE(user_id => 1110,
+		       	                           		resp_id => 50717,
+			                                   	RESP_APPL_ID => 101);
+              
+       
+
+           
+             l_import_sec_e    := gl_interface_control_pkg.get_unique_run_id; 
+             
+             gl_interface_control_pkg.insert_row(xinterface_run_id => l_import_sec_e,  
+                                                  xje_source_name   => 'Manual',  
+                                                  xledger_id        => p_SET_OF_BOOKS_ID_ENTRY,  
+                                                  xgroup_id         => 20170009,  
+                                                  xpacket_id        => NULL);  
+           
+          
+               l_req_id_e := fnd_request.submit_request(
+                                         'SQLGL',  
+                                         'GLLEZL',  
+                                         '',  
+                                         to_char(SYSDATE,  
+                                                 'YYYY/MM/DD HH24:MI:SS'),  
+                                         FALSE,  
+                                         to_char(l_import_sec_e),-- Argument1  
+                                         fnd_profile.value('GL_ACCESS_SET_ID'),                                       
+                                         'N',  
+                                         NULL,  
+                                         NULL,  
+                                         'N',  
+                                         'N', -- «∑Òµº»ÎµØ–‘”Ú◊÷∂Œ,»˝÷÷∑Ω Ω N(≤ªµº»Î),W(—È÷§µº»ÎWITH VALIDATE),O(≤ª—È÷§WITHOUT VALIDATE)  
+                                         'Y',
+                                         chr(0));  
+  
+                          IF l_req_id_e <= 0 OR l_req_id_e IS NULL THEN  
+                            p_msg := 'Ã·Ωª◊™»Î - µº»Î»’º«’   ±∑¢…˙¥ÌŒÛ'; 
+                            p_status  := 'S'; 
+                            RAISE g_exception;  
+                          ELSE  
+                             COMMIT;  
+                            p_msg :='“—≥…π¶Ã·Ωª◊™»Îπ´Àæ«Î«Û£¨request_id=' || l_req_id_e;  
+                          END IF;  
+                          
+                         
+             
+                    
+  
+        
+        ----------Ã·Ωª◊™≥ˆπ´Àæ»’º«’À«Î«Û--------
+            APPS.FND_GLOBAL.APPS_INITIALIZE(user_id => 1110,
+			                                    	resp_id => 50765,
+			                                      	RESP_APPL_ID => 101);
+           
+              
+              l_import_sec_t     := gl_interface_control_pkg.get_unique_run_id;
+               
+              
+                gl_interface_control_pkg.insert_row(xinterface_run_id => l_import_sec_t,  
+                                                  xje_source_name   => 'Manual',  
+                                                  xledger_id        => p_SET_OF_BOOKS_ID_TRANSFER,  
+                                                  xgroup_id         => 20170009,  
+                                                  xpacket_id        => NULL);  
+           
+            
+               
+               l_req_id_t := fnd_request.submit_request(
+                                         'SQLGL',  
+                                         'GLLEZL',  
+                                         ' ',  
+                                         to_char(SYSDATE,  
+                                                 'YYYY/MM/DD HH24:MI:SS'),  
+                                         FALSE,  
+                                         to_char(l_import_sec_t),-- Argument1  
+                                          fnd_profile.value('GL_ACCESS_SET_ID'), 
+                                         
+                                         'N',  
+                                         NULL,  
+                                         NULL,  
+                                         'N',  
+                                         'N', -- «∑Òµº»ÎµØ–‘”Ú◊÷∂Œ,»˝÷÷∑Ω Ω N(≤ªµº»Î),W(—È÷§µº»ÎWITH VALIDATE),O(≤ª—È÷§WITHOUT VALIDATE)  
+                                         'Y',
+                                         chr(0));  
+  
+                          IF l_req_id_t <= 0 OR l_req_id_t IS NULL THEN  
+                            p_msg := 'Ã·Ωª◊™≥ˆ- µº»Î»’º«’   ±∑¢…˙¥ÌŒÛ'; 
+                            p_status  := 'S'; 
+                            RAISE g_exception;  
+                          ELSE  
+                             COMMIT;  
+                            p_msg :='“—≥…π¶Ã·Ωª◊™≥ˆπ´Àæ«Î«Û£¨request_id=' || l_req_id_t;  
+                          END IF;  
+                         
+                         
+               l_wait_req_e := fnd_concurrent.wait_for_request(l_req_id_e,  
+                                                1,  
+                                                15,  
+                                                l_child_phase,  
+                                                l_child_status,  
+                                                l_dev_phase,  
+                                                l_dev_status,  
+                                                l_message);  
+   
+              IF l_wait_req_e THEN
+                  IF l_dev_status =  'NORMAL' then
+                    declare 
+                       l_je_batch_id number;
+                     begin
+                         select je_batch_id into l_je_batch_id 
+                             from  GL_JE_BATCHES where name like '%'|| l_req_id_e;
+                             
+                      
+                    select doc_sequence_value into p_doc_sequence_value_e
+                      from gl_je_headers  
+                      where
+                       je_batch_id = l_je_batch_id;
+                      
+                      update_je_flex(l_bank_cash_ccid_e,P_CODE_COMBINATION_ID_E,p_cash_items_entry,l_je_batch_id); 
+                     exception
+                       when others then 
+                         p_msg     := '∏¸–¬»’º«’ÀµØ–‘”Ú ß∞‹';
+                         p_status  := 'E';
+                         RETURN;
+                      end; 
+                  end if;
+              end if; 
+                    
+                    
+               l_wait_req_t := fnd_concurrent.wait_for_request(l_req_id_t,  
+                                                1,  
+                                                5,  
+                                                l_child_phase,  
+                                                l_child_status,  
+                                                l_dev_phase,  
+                                                l_dev_status,  
+                                                l_message);  
+   
+              IF l_wait_req_t THEN
+                  IF l_dev_status =  'NORMAL' then
+                     declare 
+                       l_je_batch_id number;
+                     begin
+                         select je_batch_id into l_je_batch_id 
+                             from  GL_JE_BATCHES where name like '%'|| l_req_id_t;
+                             
+                      
+                    select doc_sequence_value into p_doc_sequence_value_t
+                      from gl_je_headers  
+                      where
+                       je_batch_id = l_je_batch_id;
+                      
+                      update_je_flex(l_bank_cash_ccid_t,P_CODE_COMBINATION_ID_T,p_cash_items_transfer,l_je_batch_id); 
+                    exception
+                       when others then 
+                         p_msg     := '∏¸–¬»’º«’ÀµØ–‘”Ú ß∞‹';
+                         p_status  := 'E';
+                        RETURN;
+                     end;
+                  end if;
+              end if; 
+                             
+                        commit;
+                                      
+            
+  
+            EXCEPTION 
+								   WHEN g_exception then
+											  rollback;
+											  return;             
+            
+  END CREATE_GL;    
+      
+      
+  
+  PROCEDURE CREATE_GL_INTERNAL  (
+    
+                p_TRANSFER_DATE               IN      DATE,
+                p_ENTRY_DATE                  IN      DATE,
+               
+                p_CURRENCY_CODE_TRANSFER      IN      VARCHAR2,
+               
+                p_SET_OF_BOOKS_ID_TRANSFER    IN      NUMBER,
+                p_SET_OF_BOOKS_ID_ENTRY       IN      NUMBER,
+               
+                p_AMOUNT_T                    IN      NUMBER,
+                
+                p_BANK_ID_T                   IN      NUMBER,
+                p_BANK_ID_E                   IN      NUMBER,
+                p_status                      OUT     VARCHAR,
+                p_msg                         OUT     VARCHAR,
+               
+                p_doc_sequence_value_t        out     number
+               
+                  
+    )
+      IS
+      
+        l_period_name_t     varchar2(30);      --◊™≥ˆπ´Àæ∆⁄º‰√˚≥∆
+        l_period_name_e     varchar2(30);   --◊™»Îπ´Àæ∆⁄º‰√˚≥∆
+        --l_group_id      number;
+        l_bank_cash_ccid_t    number;
+        l_bank_cash_ccid_e    number;
+        bank_acct_use_id_t    number;
+        bank_acct_use_id_e    number;
+    --    l_req_id              number;
+        l_import_sec_t        NUMBER; 
+     
+       
+        l_req_id_t            number;
+     
+        l_wait_req_t         BOOLEAN;
+        l_child_phase        VARCHAR2(100);  
+        l_child_status      VARCHAR2(100);  
+        l_dev_phase         VARCHAR2(100);  
+        l_dev_status        VARCHAR2(100);  
+        l_message           VARCHAR2(100);  
+         
+         
+        
+        
+       
+        BEGIN
+                  
+           p_status := 'S';
+          
+           --∏˘æ›◊™’À»’∆⁄≈–∂œ∆⁄º‰√˚≥∆
+           
+            begin
+                select gps.period_name
+                into  l_period_name_t 
+                from gl_period_statuses gps
+                where gps.closing_status = 'O'
+                       and p_TRANSFER_DATE between gps.start_date and gps.end_date
+                       and gps.application_id = 101
+                       and gps.set_of_books_id =p_SET_OF_BOOKS_ID_TRANSFER ;--pi_set_of_books_id
+            exception
+                when others then
+                p_msg := 'º«’À»’∆⁄≤ª‘⁄¥Úø™µƒª·º∆∆⁄º‰ƒ⁄';
+                p_status  := 'E';
+                raise g_exception;
+             end;
+             
+             
+              begin
+                select gps.period_name
+                into  l_period_name_e 
+                from gl_period_statuses gps
+                where gps.closing_status = 'O'
+                       and p_ENTRY_DATE between gps.start_date and gps.end_date
+                       and gps.application_id = 101
+                       and gps.set_of_books_id =p_SET_OF_BOOKS_ID_ENTRY ;--pi_set_of_books_id
+            exception
+                when others then
+                p_msg := 'º«’À»’∆⁄≤ª‘⁄¥Úø™µƒª·º∆∆⁄º‰ƒ⁄';
+                p_status  := 'E';
+                raise g_exception;
+             end;
+         
+        
+        
+        
+          
+            begin  -- ≤È—Øbank_use_id
+                   select bank_acct_use_id into bank_acct_use_id_t 
+                           from ce_bank_acct_uses_all  
+                           where bank_account_id = p_BANK_ID_T ;
+                           
+                    select bank_acct_use_id into bank_acct_use_id_e  
+                            from ce_bank_acct_uses_all 
+                            where bank_account_id = p_BANK_ID_E ; 
+     	     exception
+                  when others then
+                           p_msg    := 'Œﬁ∑®’“µΩ∂‘”¶“¯––’Àªß';
+                           p_status := 'E';
+                           RAISE  g_exception;
+               END;
+                  
+              
+              
+              
+       
+              
+              
+               begin  --≤È—Øπ´Àæ◊™’À’Àªß∂‘”¶µƒœ÷Ωø∆ƒø  
+            select cash_ccid into l_bank_cash_ccid_t
+              from AR_RECEIPT_METHOD_ACCOUNTS_ALL
+                WHERE REMIT_BANK_ACCT_USE_ID = bank_acct_use_id_t;
+            
+            
+            select cash_ccid into l_bank_cash_ccid_e
+              from AR_RECEIPT_METHOD_ACCOUNTS_ALL
+                WHERE REMIT_BANK_ACCT_USE_ID =bank_acct_use_id_e ;
+                  exception
+                        when others then
+               p_msg    := 'œ÷Ωø∆ƒø';
+               p_status := 'E';
+               RAISE  g_exception;
+        END;
+                      
+          --≤Â≥ˆ◊™≥ˆπ´ÀæΩË∑ΩœÓ
+          INSERT INTO GL_INTERFACE
+                      (STATUS,
+                      LEDGER_ID,
+                      SET_OF_BOOKS_ID,
+                      ACCOUNTING_DATE,
+                      CURRENCY_CODE,
+                      DATE_CREATED,
+                      CREATED_BY,
+                      ACTUAL_FLAG,
+                      GROUP_ID,
+                      USER_JE_CATEGORY_NAME,
+                      USER_JE_SOURCE_NAME,
+                      CODE_COMBINATION_ID,
+                      ENTERED_DR,
+                      ENTERED_CR,
+                      ACCOUNTED_DR,
+                      ACCOUNTED_CR,
+                      PERIOD_NAME,
+                      REFERENCE1)
+                       VALUES 
+                      (
+                      'NEW',
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_TRANSFER_DATE,      
+                      p_CURRENCY_CODE_TRANSFER,
+                      SYSDATE,
+                      fnd_global.user_id,
+                      'A',
+                      20170009,
+                      '◊ Ωπ‹¿ÌœµÕ≥',
+                      '»Àπ§',
+                      l_bank_cash_ccid_e,
+                      p_AMOUNT_T,
+                      null,
+                      p_AMOUNT_T,
+                      null,
+                      l_period_name_t,
+                      '◊ Ωµ˜≤¶');
+                      
+                      
+                      
+            --≤Â≥ˆ◊™≥ˆπ´Àæ¥˚∑ΩœÓ
+           
+            INSERT INTO GL_INTERFACE
+                      (STATUS,
+                      LEDGER_ID,
+                      SET_OF_BOOKS_ID,
+                      ACCOUNTING_DATE,
+                      CURRENCY_CODE,
+                      DATE_CREATED,
+                      CREATED_BY,
+                      ACTUAL_FLAG,
+                      GROUP_ID,
+                      USER_JE_CATEGORY_NAME,
+                      USER_JE_SOURCE_NAME,
+                      CODE_COMBINATION_ID,
+                      ENTERED_DR,
+                      ENTERED_CR,
+                      ACCOUNTED_DR,
+                      ACCOUNTED_CR,
+                      PERIOD_NAME,
+                      REFERENCE1)
+                       VALUES 
+                      (
+                      'NEW',
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_SET_OF_BOOKS_ID_TRANSFER,
+                      p_TRANSFER_DATE,     
+                      p_CURRENCY_CODE_TRANSFER,
+                      SYSDATE,
+                      fnd_global.user_id,
+                      'A',
+                      20170009,
+                      '◊ Ωπ‹¿ÌœµÕ≥',
+                      '»Àπ§',
+                      l_bank_cash_ccid_t,
+                      null,
+                      p_AMOUNT_T,
+                      null,
+                      p_AMOUNT_T,
+                      l_period_name_t,
+                      '◊ Ωµ˜≤¶');
+                      
+                     
+           
+                      
+                     p_msg := '≥…π¶≤Â»ÎΩ”ø⁄±Ì';
+                     p_status  := 'S';
+               
+           
+      
+                    
+  
+        
+        ----------Ã·Ωª◊™≥ˆπ´Àæ»’º«’À«Î«Û--------
+            APPS.FND_GLOBAL.APPS_INITIALIZE(user_id => 1110,
+                                            resp_id => 50765,
+                                              RESP_APPL_ID => 101);
+           
+              
+              l_import_sec_t     := gl_interface_control_pkg.get_unique_run_id;
+               
+              
+                gl_interface_control_pkg.insert_row(xinterface_run_id => l_import_sec_t,  
+                                                  xje_source_name   => 'Manual',  
+                                                  xledger_id        => p_SET_OF_BOOKS_ID_TRANSFER,  
+                                                  xgroup_id         => 20170009,  
+                                                  xpacket_id        => NULL);  
+           
+            
+               
+               l_req_id_t := fnd_request.submit_request(
+                                         'SQLGL',  
+                                         'GLLEZL',  
+                                         ' ',  
+                                         to_char(SYSDATE,  
+                                                 'YYYY/MM/DD HH24:MI:SS'),  
+                                         FALSE,  
+                                         to_char(l_import_sec_t),-- Argument1  
+                                          fnd_profile.value('GL_ACCESS_SET_ID'), 
+                                         
+                                         'N',  
+                                         NULL,  
+                                         NULL,  
+                                         'N',  
+                                         'N', -- «∑Òµº»ÎµØ–‘”Ú◊÷∂Œ,»˝÷÷∑Ω Ω N(≤ªµº»Î),W(—È÷§µº»ÎWITH VALIDATE),O(≤ª—È÷§WITHOUT VALIDATE)  
+                                         'Y',
+                                         chr(0));  
+  
+                          IF l_req_id_t <= 0 OR l_req_id_t IS NULL THEN  
+                            p_msg := 'Ã·Ωª◊™≥ˆ- µº»Î»’º«’   ±∑¢…˙¥ÌŒÛ'; 
+                            p_status  := 'S'; 
+                            RAISE g_exception;  
+                          ELSE  
+                             COMMIT;  
+                            p_msg :='“—≥…π¶Ã·Ωª◊™≥ˆπ´Àæ«Î«Û£¨request_id=' || l_req_id_t;  
+                          END IF;  
+          
+                    
+                    
+               l_wait_req_t := fnd_concurrent.wait_for_request(l_req_id_t,  
+                                                1,  
+                                                5,  
+                                                l_child_phase,  
+                                                l_child_status,  
+                                                l_dev_phase,  
+                                                l_dev_status,  
+                                                l_message);  
+   
+              IF l_wait_req_t THEN
+                  IF l_dev_status =  'NORMAL' then
+                    select doc_sequence_value into p_doc_sequence_value_t
+                      from gl_je_headers  
+                      where
+                       je_batch_id = 
+                             (select je_batch_id  from  GL_JE_BATCHES where name like '%'|| l_req_id_t);
+                  end if;
+              end if; 
+                             
+                        commit;
+                                      
+            
+  
+            EXCEPTION 
+                   WHEN g_exception then
+                        rollback;
+                        return;             
+            
+  END CREATE_GL_INTERNAL;    
+
+
+end bhsc_import_invoice_pkg;
+      
+      
+      
+      
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+  
+   
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+/

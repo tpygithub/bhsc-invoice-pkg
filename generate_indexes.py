@@ -3,7 +3,7 @@ import os
 
 def generate_repository_indexes():
     """
-    Function to post a request to Greptile API to generate indexes for the repository.
+    test: Function to post a request to Greptile API to generate indexes for the repository.
     Requires environment variables: GREPTILE_AUTH_TOKEN and GITHUB_TOKEN
     """
     url = "https://api.greptile.com/v2/repositories"
